@@ -1,0 +1,43 @@
+# ── Web Framework ────────────────────────────────────────
+fastapi==0.110.3
+uvicorn[standard]==0.29.0
+gunicorn==22.0.0
+
+# ── Task Queue ───────────────────────────────────────────
+celery[redis]==5.4.0
+redis==5.0.6
+
+# ── Database ─────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.30
+asyncpg==0.29.0
+alembic==1.13.2
+
+# ── Data Validation ──────────────────────────────────────
+pydantic[email]==2.7.4
+pydantic-settings==2.3.4
+
+# ── Auth & Security ──────────────────────────────────────
+PyJWT==2.8.0
+passlib[bcrypt]==1.7.4
+cryptography==42.0.8
+python-multipart==0.0.9
+
+# ── OCR ──────────────────────────────────────────────────
+google-cloud-documentai==2.29.0
+pytesseract==0.3.10
+pdf2image==1.17.0
+Pillow==10.4.0
+
+# ── PDF Generation ───────────────────────────────────────
+weasyprint==62.3
+
+# ── Email ────────────────────────────────────────────────
+aiosmtplib==3.0.1
+
+# ── Rate Limiting ────────────────────────────────────────
+slowapi==0.1.9
+
+# ── HTTP / Utils ─────────────────────────────────────────
+httpx==0.27.0
+python-dotenv==1.0.1
+python-magic==0.4.27

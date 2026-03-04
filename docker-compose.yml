@@ -1,0 +1,123 @@
+# docker-compose.yml — Development
+# Usage: docker compose up -d
+# Starts: api, worker, beat, db (PostgreSQL 15), redis, mailhog, frontend (Vite HMR)
+version: "3.9"
+
+services:
+
+  # ─────────────────────────────────────────────────────────
+  # Frontend — Vite Dev Server with HMR
+  # ─────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      target: development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - api
+
+  # ─────────────────────────────────────────────────────────
+  # Backend API — FastAPI + Uvicorn (--reload)
+  # ─────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      target: development
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    env_file:
+      - .env
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─────────────────────────────────────────────────────────
+  # Celery Worker — OCR / Calculation / PDF / CRM / Cleanup
+  # ─────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      target: development
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    env_file:
+      - .env
+    command: celery -A app.celery_app worker --loglevel=debug --concurrency=4
+    depends_on:
+      - redis
+      - db
+
+  # ─────────────────────────────────────────────────────────
+  # Celery Beat — Scheduled tasks (file TTL cleanup, etc.)
+  # ─────────────────────────────────────────────────────────
+  beat:
+    build:
+      context: ./backend
+      target: development
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    env_file:
+      - .env
+    command: celery -A app.celery_app beat --loglevel=info
+    depends_on:
+      - redis
+
+  # ─────────────────────────────────────────────────────────
+  # PostgreSQL 15
+  # ─────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ieepa_refund_db
+      POSTGRES_USER: ieepa_app
+      POSTGRES_PASSWORD: dev_password_only
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"    # exposed for local tooling in dev only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ieepa_app -d ieepa_refund_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # Redis 7 — Celery broker + result backend + rate-limit counters
+  # ─────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"    # exposed for local tooling in dev only
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # MailHog — Local SMTP server (replaces AWS SES in dev)
+  # Web UI: http://localhost:8025
+  # SMTP:   localhost:1025
+  # ─────────────────────────────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"    # SMTP
+      - "8025:8025"    # Web UI
+
+volumes:
+  postgres_data:
