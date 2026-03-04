@@ -7,8 +7,6 @@ POST /api/v1/auth/logout  — blacklist refresh token
 
 JWT / Refresh Token spec: Security_Spec.md §7.1.2–7.1.4
 """
-from __future__ import annotations
-
 from datetime import timedelta
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
@@ -17,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.dependencies import CurrentUser, RedisClient, get_db, get_redis
+from app.core.dependencies import CurrentUser, DBSession, RedisClient
 from app.core.limiter import limiter
 from app.core.security import (
     blacklist_refresh_token,
@@ -77,8 +75,8 @@ async def login(
     request: Request,
     body: LoginRequest,
     response: Response,
-    db: AsyncSession = Depends(get_db),
-    redis: RedisClient = Depends(get_redis),
+    db: DBSession,
+    redis: RedisClient,
 ) -> TokenResponse:
     """
     Authenticate with email + password.
@@ -128,9 +126,9 @@ async def login(
 async def refresh_token(
     request: Request,
     response: Response,
+    db: DBSession,
+    redis: RedisClient,
     refresh_token_cookie: str | None = Cookie(default=None, alias=_REFRESH_COOKIE_NAME),
-    db: AsyncSession = Depends(get_db),
-    redis: RedisClient = Depends(get_redis),
 ) -> RefreshResponse:
     """
     Exchange a valid Refresh Token Cookie for new access + refresh tokens.
@@ -198,8 +196,8 @@ async def logout(
     request: Request,
     response: Response,
     current_user: CurrentUser,
+    redis: RedisClient,
     refresh_token_cookie: str | None = Cookie(default=None, alias=_REFRESH_COOKIE_NAME),
-    redis: RedisClient = Depends(get_redis),
 ) -> dict:
     """
     Invalidate the current refresh token and clear the Cookie.

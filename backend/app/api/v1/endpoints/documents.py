@@ -15,12 +15,13 @@ Upload security controls (Security_Spec.md §7.3.4, SEC-007)
 6. File stored encrypted on disk (AES-256/Fernet) before job is queued
 7. Session cookie issued to guest on first upload (§7.1.7)
 """
-from __future__ import annotations
-
+import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 
 import magic  # python-magic — SEC-007
+import redis.asyncio as aioredis
 from fastapi import (
     APIRouter,
     Cookie,
@@ -38,8 +39,16 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.dependencies import OptionalUser, get_db
+from app.core.dependencies import OptionalUser, get_db, get_redis
 from app.core.limiter import limiter
+from app.engine.calculator import (
+    EntryInput,
+    LineItem,
+    MPF_RATE,
+    HMF_RATE,
+    calculate_entry,
+)
+from app.models.calculation import Calculation, CalculationStatus
 from app.models.document import Document, DocumentStatus
 from app.tasks.ocr import TASK_NAME, store_upload_encrypted
 
@@ -82,7 +91,10 @@ async def _validate_file(file: UploadFile) -> bytes:
     # before we know it's too large.
     chunks: list[bytes] = []
     total = 0
-    async for chunk in file:
+    while True:
+        chunk = await file.read(65536)  # 64 KB per read
+        if not chunk:
+            break
         total += len(chunk)
         if total > _MAX_BYTES:
             raise HTTPException(
@@ -386,3 +398,264 @@ async def _get_authorized_doc(
         return doc
 
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
+# ---------------------------------------------------------------------------
+# Field-merge helpers (also imported by results endpoint)
+# ---------------------------------------------------------------------------
+
+def merge_doc_fields(extracted: dict | None, corrections: dict | None) -> dict:
+    """
+    Merge user corrections over OCR extracted_fields.
+    Returns a flat dict of {field_name: plain_value}.
+
+    extracted_fields values are OcrField dicts: {"value": ..., "confidence": ..., "review_required": ...}
+    corrections values are plain scalars (strings from the review form).
+    Line-item corrections use keys like "line_items[0].hts_code".
+    """
+    fields: dict = {}
+    if extracted:
+        for k, v in extracted.items():
+            if k in ("line_items", "review_required_count"):
+                continue
+            fields[k] = v["value"] if isinstance(v, dict) and "value" in v else v
+
+    if corrections:
+        for k, v in corrections.items():
+            if k == "line_items" or "[" in k:
+                continue  # line-item corrections handled separately
+            fields[k] = v
+
+    return fields
+
+
+def _parse_date(raw: object) -> date:
+    """Parse a date string from OCR (various formats) or return today."""
+    if not raw:
+        return date.today()
+    raw_str = str(raw).strip()
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%d/%m/%Y", "%Y%m%d"):
+        try:
+            return datetime.strptime(raw_str, fmt).date()
+        except ValueError:
+            continue
+    return date.today()
+
+
+def _safe_decimal(val: object, default: Decimal = Decimal("0")) -> Decimal:
+    try:
+        cleaned = str(val).replace(",", "").replace("$", "").strip()
+        return Decimal(cleaned)
+    except (InvalidOperation, TypeError, ValueError):
+        return default
+
+
+def parse_entry_input(doc: "Document") -> "EntryInput":
+    """Build EntryInput from a Document's extracted_fields + corrections."""
+    fields = merge_doc_fields(doc.extracted_fields, doc.corrections)
+    header_country = str(fields.get("country_of_origin") or "").upper()
+
+    summary_date = _parse_date(fields.get("summary_date"))
+    total_ev = _safe_decimal(fields.get("total_entered_value"))
+    transport = str(fields.get("mode_of_transport") or "air").strip().lower()
+    entry_number = str(fields.get("entry_number") or "UNKNOWN").strip()
+
+    # --- Build line items from extracted_fields ---
+    raw_items: list = (doc.extracted_fields or {}).get("line_items", [])
+
+    # Collect line-item corrections keyed as "line_items[N].field"
+    li_corrections: dict[int, dict] = {}
+    for k, v in (doc.corrections or {}).items():
+        m = re.match(r"line_items\[(\d+)\]\.(.+)", k)
+        if m:
+            idx, field = int(m.group(1)), m.group(2)
+            li_corrections.setdefault(idx, {})[field] = v
+
+    line_items: list[LineItem] = []
+    for i, item in enumerate(raw_items):
+        def _fval(d: dict, key: str) -> str:
+            v = d.get(key)
+            if isinstance(v, dict):
+                return str(v.get("value") or "")
+            return str(v or "")
+
+        hts = _fval(item, "hts_code")
+        ev_raw = _fval(item, "entered_value") or "0"
+        country = _fval(item, "country_of_origin") or header_country
+
+        # Apply line-item corrections
+        corr = li_corrections.get(i, {})
+        hts = corr.get("hts_code", hts)
+        ev_raw = corr.get("entered_value", ev_raw)
+        country = corr.get("country_of_origin", country)
+
+        ev = _safe_decimal(ev_raw)
+        if hts and ev > 0:
+            line_items.append(LineItem(
+                hts_code=hts,
+                country_of_origin=(country.upper() or header_country or ""),
+                entered_value=ev,
+            ))
+
+    # Fallback: one synthetic line item using the total_entered_value
+    if not line_items:
+        fallback_country = header_country or "CN"
+        line_items.append(LineItem(
+            hts_code="0000.00.0000",
+            country_of_origin=fallback_country,
+            entered_value=total_ev if total_ev > 0 else Decimal("1"),
+        ))
+
+    if total_ev == Decimal("0"):
+        total_ev = sum(li.entered_value for li in line_items)
+
+    return EntryInput(
+        entry_number=entry_number,
+        summary_date=summary_date,
+        mode_of_transport=transport,
+        line_items=line_items,
+        total_entered_value=total_ev,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /documents/{job_id}/calculate
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/{job_id}/calculate",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger tariff calculation for a completed OCR job",
+)
+@limiter.limit("20/minute")
+async def calculate_document(
+    request: Request,
+    job_id: uuid.UUID,
+    x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
+    session_id_cookie: str | None = Cookie(default=None, alias="session_id"),
+    current_user: OptionalUser = None,
+    db: AsyncSession = Depends(get_db),
+    redis: aioredis.Redis = Depends(get_redis),
+) -> dict:
+    """
+    Run the tariff calculation engine (BR-001–BR-011) on an OCR-completed job.
+    Returns calculation_id; result is available via GET /api/v1/results/{id}.
+    """
+    doc = await _get_authorized_doc(db, job_id, session_id_cookie, current_user)
+
+    if doc.status not in (DocumentStatus.completed, DocumentStatus.review_required):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="JOB_NOT_READY",
+        )
+
+    # Idempotency: return existing completed calculation for this document
+    existing = await db.execute(
+        select(Calculation)
+        .where(Calculation.document_id == job_id)
+        .order_by(Calculation.created_at.desc())  # type: ignore[attr-defined]
+        .limit(1)
+    )
+    existing_calc: Calculation | None = existing.scalar_one_or_none()
+    if existing_calc and existing_calc.status == CalculationStatus.completed:
+        return {
+            "success": True,
+            "data": {"calculation_id": str(existing_calc.id)},
+            "error": None,
+            "meta": None,
+        }
+
+    # Parse inputs from OCR fields + corrections
+    try:
+        inputs = parse_entry_input(doc)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Cannot parse document fields: {exc}",
+        )
+
+    # Create the Calculation row
+    calc_id = uuid.uuid4()
+    new_calc = Calculation(
+        id=calc_id,
+        document_id=job_id,
+        status=CalculationStatus.calculating,
+        entry_number=inputs.entry_number,
+        summary_date=inputs.summary_date,
+        country_of_origin=(
+            inputs.line_items[0].country_of_origin if inputs.line_items else None
+        ),
+        mode_of_transport=inputs.mode_of_transport,
+        total_entered_value=float(inputs.total_entered_value),
+    )
+    db.add(new_calc)
+    await db.commit()
+
+    # Run calculation synchronously in-process (BR-001–BR-011)
+    try:
+        result = await calculate_entry(
+            db=db,
+            redis=redis,
+            calculation_id=calc_id,
+            inputs=inputs,
+        )
+    except Exception as exc:
+        await db.execute(
+            update(Calculation)
+            .where(Calculation.id == calc_id)
+            .values(status=CalculationStatus.failed)
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Calculation engine error: {exc}",
+        )
+
+    # Persist duty breakdown + final status (CalculationAudit added by calculate_entry)
+    duty_json = [
+        {
+            "tariff_type": dc.tariff_type,
+            "hts_code": dc.hts_code,
+            "country_of_origin": dc.country_of_origin,
+            "entered_value": float(dc.entered_value),
+            "rate_pct": float(dc.rate_pct),
+            "amount": float(dc.amount),
+            "applicable": dc.applicable,
+        }
+        for dc in result.line_duty_components
+    ] + [
+        {
+            "tariff_type": "MPF",
+            "rate_pct": float(MPF_RATE),
+            "amount": float(result.mpf.amount),
+            "applicable": True,
+        },
+        {
+            "tariff_type": "HMF",
+            "rate_pct": float(HMF_RATE),
+            "amount": float(result.hmf.amount),
+            "applicable": result.hmf.applicable,
+        },
+    ]
+
+    await db.execute(
+        update(Calculation)
+        .where(Calculation.id == calc_id)
+        .values(
+            status=CalculationStatus.completed,
+            duty_components=duty_json,
+            total_duty=float(result.total_duty),
+            estimated_refund=float(result.estimated_refund),
+            refund_pathway=result.refund_pathway,
+            days_since_summary=result.days_since_summary,
+            pathway_rationale=result.pathway_rationale,
+        )
+    )
+    await db.commit()
+
+    return {
+        "success": True,
+        "data": {"calculation_id": str(calc_id)},
+        "error": None,
+        "meta": None,
+    }

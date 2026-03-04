@@ -1,0 +1,271 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useDropzone } from 'react-dropzone'
+import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
+import { v4 as uuidv4 } from 'uuid'
+import { calculate, getJobStatus, uploadDocument } from '../api/documents'
+import StepIndicator from '../components/ui/StepIndicator'
+import { useUploadStore } from '../store/uploadStore'
+
+const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png']
+const MAX_BYTES = 20 * 1024 * 1024
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 ** 2).toFixed(2)} MB`
+}
+
+const ERROR_MAP: Record<string, string> = {
+  UNSUPPORTED_FILE_TYPE: 'calculate.err_unsupported',
+  FILE_TOO_LARGE: 'calculate.err_too_large',
+  UNRECOGNISED_DOCUMENT: 'calculate.err_unrecognised',
+  OCR_TIMEOUT: 'calculate.err_timeout',
+  RATE_LIMIT_EXCEEDED: 'calculate.err_rate_limit',
+}
+
+export default function CalculatePage(): JSX.Element {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { file, status, errorCode, setFile, setJobId, setCalculationId, setStatus, setError, reset } =
+    useUploadStore()
+
+  const [privacyAccepted, setPrivacyAccepted] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Clean up polling on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  const stopPoll = (): void => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
+
+  const startPolling = (jobId: string): void => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await getJobStatus(jobId)
+        setStatus(res.status as never)
+        if (res.status === 'review_required') {
+          stopPoll()
+          navigate(`/review?job_id=${jobId}`)
+        } else if (res.status === 'completed') {
+          stopPoll()
+          setStatus('calculating')
+          const { calculation_id } = await calculate(jobId)
+          setCalculationId(calculation_id)
+          navigate(`/results/${calculation_id}`)
+        } else if (res.status === 'failed') {
+          stopPoll()
+          setError(res.error ?? 'GENERIC')
+        }
+      } catch {
+        stopPoll()
+        setError('GENERIC')
+      }
+    }, 2000)
+  }
+
+  const handleUpload = async (): Promise<void> => {
+    if (!file) return
+    const idempotencyKey = uuidv4()
+    setStatus('uploading')
+    try {
+      const { job_id } = await uploadDocument(file, idempotencyKey)
+      setJobId(job_id)
+      setStatus('queued')
+      startPolling(job_id)
+    } catch (err: unknown) {
+      const code =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'GENERIC'
+      setError(code)
+    }
+  }
+
+  const onDrop = useCallback(
+    (accepted: File[], rejected: readonly { errors: readonly { code: string }[] }[]): void => {
+      if (rejected.length > 0) {
+        const code = rejected[0].errors[0].code
+        if (code === 'file-too-large') setError('FILE_TOO_LARGE')
+        else setError('UNSUPPORTED_FILE_TYPE')
+        return
+      }
+      if (accepted[0]) setFile(accepted[0])
+    },
+    [setFile, setError],
+  )
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'application/pdf': ['.pdf'], 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'] },
+    maxSize: MAX_BYTES,
+    maxFiles: 1,
+    disabled: !privacyAccepted || (status !== 'idle' && status !== 'ready' && status !== 'failed'),
+  })
+
+  const isProcessing = ['uploading', 'queued', 'processing', 'calculating'].includes(status)
+
+  const errorText = errorCode
+    ? t(ERROR_MAP[errorCode] ?? 'calculate.err_generic')
+    : null
+
+  const progressStep =
+    status === 'uploading' ? 0 : status === 'queued' || status === 'processing' ? 1 : 2
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-8">
+      <StepIndicator current={1} />
+
+      {/* Privacy notice */}
+      <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-5">
+        <h2 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+          <span>📋</span> {t('calculate.privacy_title')}
+        </h2>
+        <p className="text-sm text-blue-800 mb-4">{t('calculate.privacy_text')}</p>
+        <label className="flex items-start gap-2 cursor-pointer select-none text-sm text-blue-900 font-medium">
+          <input
+            type="checkbox"
+            className="mt-0.5 accent-blue-800 w-4 h-4"
+            checked={privacyAccepted}
+            onChange={(e) => setPrivacyAccepted(e.target.checked)}
+          />
+          {t('calculate.privacy_accept')}
+        </label>
+      </div>
+
+      {/* Drop zone */}
+      <div
+        {...getRootProps()}
+        className={`relative border-2 border-dashed rounded-xl p-10 text-center transition-colors
+          ${!privacyAccepted ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50' : ''}
+          ${privacyAccepted && !isProcessing && status !== 'ready' ? 'border-blue-300 bg-blue-50 hover:border-blue-500 cursor-pointer' : ''}
+          ${isDragActive ? 'border-blue-600 bg-blue-100' : ''}
+          ${status === 'ready' ? 'border-green-400 bg-green-50 cursor-pointer' : ''}
+          ${isProcessing ? 'border-gray-200 bg-gray-50 cursor-default' : ''}
+        `}
+        title={!privacyAccepted ? t('calculate.dropzone_disabled_tip') : undefined}
+      >
+        <input {...getInputProps()} />
+
+        {!isProcessing && status !== 'ready' && (
+          <>
+            <div className="text-5xl mb-4">{isDragActive ? '📂' : '⬆️'}</div>
+            <p className="text-gray-700 font-medium mb-1">
+              {isDragActive ? t('calculate.dropzone_active') : t('calculate.dropzone_title')}
+            </p>
+            <p className="text-gray-400 text-sm mb-4">
+              {t('calculate.dropzone_or')}{' '}
+              <span className="text-blue-700 underline">{t('calculate.dropzone_browse')}</span>
+            </p>
+            <p className="text-xs text-gray-400">{t('calculate.dropzone_hint')}</p>
+          </>
+        )}
+
+        {/* File selected preview */}
+        {status === 'ready' && file && (
+          <div className="flex flex-col items-center gap-3">
+            <div className="text-5xl">
+              {file.type === 'application/pdf' ? '📄' : '🖼️'}
+            </div>
+            <div className="w-full max-w-xs bg-white border border-green-200 rounded-lg p-4 text-left text-sm shadow-sm">
+              <p className="font-semibold text-gray-800 mb-2">{t('calculate.file_selected')}</p>
+              <div className="space-y-1 text-gray-600">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">{t('calculate.file_name')}</span>
+                  <span className="font-medium truncate max-w-[160px]">{file.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">{t('calculate.file_size')}</span>
+                  <span className="font-medium">{formatBytes(file.size)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">{t('calculate.file_type')}</span>
+                  <span className="font-medium">{file.type || '—'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Processing state */}
+        {isProcessing && (
+          <div className="flex flex-col items-center gap-4">
+            {/* Progress steps */}
+            <div className="flex items-center gap-2 text-xs font-medium">
+              {[t('calculate.uploading'), t('calculate.queued'), t('calculate.processing')].map(
+                (label, i) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <span
+                      className={`w-2 h-2 rounded-full ${i <= progressStep ? 'bg-blue-600' : 'bg-gray-300'}`}
+                    />
+                    <span className={i <= progressStep ? 'text-blue-700' : 'text-gray-400'}>
+                      {label}
+                    </span>
+                    {i < 2 && <span className="text-gray-300 mx-1">──</span>}
+                  </div>
+                ),
+              )}
+            </div>
+            {/* Spinner */}
+            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin" />
+            <p className="text-gray-600 text-sm">
+              {status === 'uploading'
+                ? t('calculate.uploading')
+                : status === 'queued'
+                  ? t('calculate.queued')
+                  : status === 'calculating'
+                    ? `${t('calculate.processing')} (${t('common.loading')})`
+                    : t('calculate.processing')}
+            </p>
+            {file && (
+              <p className="text-xs text-gray-400 truncate max-w-xs">{file.name}</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Error banner */}
+      {status === 'failed' && errorText && (
+        <div className="mt-4 flex items-start gap-3 bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 text-sm">
+          <span className="text-lg">⚠️</span>
+          <div className="flex-1">
+            <p className="font-medium">{errorText}</p>
+          </div>
+          <button
+            onClick={() => reset()}
+            className="ml-auto px-3 py-1.5 bg-red-700 text-white rounded-lg text-xs font-medium hover:bg-red-800"
+          >
+            {t('calculate.btn_retry')}
+          </button>
+        </div>
+      )}
+
+      {/* CTA buttons */}
+      {!isProcessing && (
+        <div className="mt-6 flex gap-3 justify-end">
+          {status === 'ready' && (
+            <button
+              onClick={() => setFile(null)}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              {t('calculate.btn_change')}
+            </button>
+          )}
+          <button
+            disabled={status !== 'ready'}
+            onClick={handleUpload}
+            className={`px-6 py-3 font-semibold rounded-xl text-white transition-colors
+              ${status === 'ready'
+                ? 'bg-blue-800 hover:bg-blue-700 active:bg-blue-900 shadow-sm'
+                : 'bg-gray-300 cursor-not-allowed'
+              }`}
+          >
+            {t('calculate.btn_start')}
+          </button>
+        </div>
+      )}
+
+      {/* Allowed types reminder */}
+      {!ALLOWED_MIME.includes(file?.type ?? '') && !file && (
+        <p className="mt-4 text-center text-xs text-gray-400">{t('calculate.dropzone_hint')}</p>
+      )}
+    </div>
+  )
+}

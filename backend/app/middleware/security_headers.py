@@ -26,6 +26,17 @@ _CSP = (
     "frame-ancestors 'none'"
 )
 
+# Relaxed CSP for Swagger / ReDoc docs pages (CDN resources needed)
+_CSP_DOCS = (
+    "default-src 'self'; "
+    "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+    "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+    "img-src 'self' data: https://fastapi.tiangolo.com; "
+    "frame-ancestors 'none'"
+)
+
+_DOCS_PATHS = {"/api/docs", "/api/redoc", "/api/openapi.json"}
+
 _HEADERS: dict[str, str] = {
     "Content-Security-Policy": _CSP,
     "X-Frame-Options": "DENY",
@@ -47,6 +58,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         response: Response = await call_next(request)
+        csp = _CSP_DOCS if request.url.path in _DOCS_PATHS else _CSP
         for header, value in _HEADERS.items():
             response.headers[header] = value
+        response.headers["Content-Security-Policy"] = csp
         return response

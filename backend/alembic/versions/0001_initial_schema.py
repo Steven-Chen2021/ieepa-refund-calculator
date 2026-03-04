@@ -76,7 +76,7 @@ def upgrade() -> None:
         sa.Column("company_name", sa.String(200), nullable=True),
         sa.Column(
             "role",
-            sa.Enum("user", "admin", name="user_role_enum"),
+            postgresql.ENUM("user", "admin", name="user_role_enum", create_type=False),
             nullable=False,
             server_default="user",
         ),
@@ -115,9 +115,10 @@ def upgrade() -> None:
         sa.Column("privacy_accepted", sa.Boolean, nullable=False, server_default="false"),
         sa.Column(
             "status",
-            sa.Enum(
+            postgresql.ENUM(
                 "queued", "processing", "completed", "review_required", "failed",
                 name="document_status_enum",
+                create_type=False,
             ),
             nullable=False,
             server_default="queued",
@@ -153,8 +154,8 @@ def upgrade() -> None:
         sa.Column("document_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
             "status",
-            sa.Enum("pending", "calculating", "completed", "failed",
-                    name="calculation_status_enum"),
+            postgresql.ENUM("pending", "calculating", "completed", "failed",
+                    name="calculation_status_enum", create_type=False),
             nullable=False,
             server_default="pending",
         ),
@@ -171,7 +172,7 @@ def upgrade() -> None:
         sa.Column("estimated_refund", sa.Numeric(14, 2), nullable=True),
         sa.Column(
             "refund_pathway",
-            sa.Enum("PSC", "PROTEST", "INELIGIBLE", name="refund_pathway_enum"),
+            postgresql.ENUM("PSC", "PROTEST", "INELIGIBLE", name="refund_pathway_enum", create_type=False),
             nullable=True,
         ),
         sa.Column("days_since_summary", sa.Integer, nullable=True),
@@ -261,7 +262,7 @@ def upgrade() -> None:
         # CRM sync
         sa.Column(
             "crm_sync_status",
-            sa.Enum("pending", "synced", "failed", name="crm_sync_status_enum"),
+            postgresql.ENUM("pending", "synced", "failed", name="crm_sync_status_enum", create_type=False),
             nullable=False,
             server_default="pending",
         ),
@@ -300,7 +301,7 @@ def upgrade() -> None:
         sa.Column("country_code", sa.String(3), nullable=False),
         sa.Column(
             "tariff_type",
-            sa.Enum("MFN", "IEEPA", "S301", "S232", name="tariff_type_enum"),
+            postgresql.ENUM("MFN", "IEEPA", "S301", "S232", name="tariff_type_enum", create_type=False),
             nullable=False,
         ),
         sa.Column("rate_pct", sa.Numeric(8, 4), nullable=False),

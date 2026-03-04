@@ -1,26 +1,9 @@
 # docker-compose.yml — Development
 # Usage: docker compose up -d
-# Starts: api, worker, beat, db (PostgreSQL 15), redis, mailhog, frontend (Vite HMR)
-version: "3.9"
+# Starts: api, worker, beat, db (PostgreSQL 15), redis, mailhog
+# Note: frontend dev server — run separately with: cd frontend && npm run dev
 
 services:
-
-  # ─────────────────────────────────────────────────────────
-  # Frontend — Vite Dev Server with HMR
-  # ─────────────────────────────────────────────────────────
-  frontend:
-    build:
-      context: ./frontend
-      target: development
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      VITE_API_BASE_URL: http://localhost:8000
-    depends_on:
-      - api
 
   # ─────────────────────────────────────────────────────────
   # Backend API — FastAPI + Uvicorn (--reload)
@@ -35,7 +18,7 @@ services:
       - ./backend:/app
       - ./data:/data
     env_file:
-      - .env
+      - ./backend/.env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       db:
@@ -54,7 +37,7 @@ services:
       - ./backend:/app
       - ./data:/data
     env_file:
-      - .env
+      - ./backend/.env
     command: celery -A app.celery_app worker --loglevel=debug --concurrency=4
     depends_on:
       - redis
@@ -71,7 +54,7 @@ services:
       - ./backend:/app
       - ./data:/data
     env_file:
-      - .env
+      - ./backend/.env
     command: celery -A app.celery_app beat --loglevel=info
     depends_on:
       - redis

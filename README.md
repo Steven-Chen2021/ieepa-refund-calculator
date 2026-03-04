@@ -78,9 +78,8 @@ This tool automates the entire process — from OCR extraction of Form 7501 fiel
 2. Celery worker runs OCR (Google Document AI primary; pytesseract fallback if confidence < 0.50 or API error)
 3. Frontend polls `GET /api/v1/documents/{job_id}/status` until `completed` or `review_required`
 4. User reviews fields on `/review`; low-confidence fields (< 0.80) shown with amber highlight; corrections saved via `PATCH /api/v1/documents/{job_id}/fields`
-5. `POST /api/v1/documents/{job_id}/calculate` → queues calculation Celery job, returns `{ calculation_id }`
-6. Calculation engine applies BR-001 through BR-011, writes immutable `calculation_audit` row
-7. Frontend navigates to `/results/:id` via `GET /api/v1/results/{calculation_id}`
+5. `POST /api/v1/documents/{job_id}/calculate` → runs BR-001–BR-011 calculation engine in-process, writes immutable `calculation_audit` row, returns `{ calculation_id }`
+6. Frontend navigates to `/results/:id` via `GET /api/v1/results/{calculation_id}`
 8. PDF export: `POST /api/v1/results/{calculation_id}/export` → WeasyPrint → HMAC-signed download token (15 min TTL)
 9. Lead capture: `POST /api/v1/leads` → AES-256-GCM encrypts PII → async CRM sync via Celery
 
@@ -136,7 +135,8 @@ backend/
     api/v1/
       endpoints/
         auth.py          # POST /auth/token, /refresh, /logout
-        documents.py     # POST /documents/upload, GET /{job_id}/status, PATCH /{job_id}/fields
+        documents.py     # POST /upload, GET /{job_id}/status, PATCH /{job_id}/fields, POST /{job_id}/calculate
+        results.py       # GET /results/{calculation_id}
       router.py          # API v1 router wiring
     core/
       config.py          # Settings (pydantic-settings + .env)
@@ -166,9 +166,18 @@ backend/
     unit/
     integration/
 frontend/
+  index.html             # HTML entry point
+  package.json           # npm dependencies (React 18, Vite 5, Tailwind 3, TanStack Query v5, …)
+  vite.config.ts         # Vite config — dev server port 5173, /api proxy → localhost:8000
+  tsconfig.json          # TypeScript strict mode config
+  tailwind.config.js     # Tailwind content paths + brand colour tokens
+  postcss.config.js      # PostCSS (Tailwind + Autoprefixer)
   src/
+    main.tsx             # React root — QueryClientProvider + BrowserRouter
+    App.tsx              # Route definitions (/, /calculate, /review, /results/:id, /register, …)
+    index.css            # Tailwind directives (@tailwind base/components/utilities)
     components/{ui,forms,layout}/
-    pages/               # Route-level components
+    pages/               # Route-level components (HomePage, CalculatePage, ReviewPage, ResultsPage)
     hooks/               # Custom React hooks
     store/               # Zustand global state
     i18n/                # en.json + zh-CN.json
@@ -207,25 +216,33 @@ python init_keys.py
 ### 3. Start services
 
 ```bash
-# Production-like (all services)
+# Start all backend services (API, Celery, DB, Redis, MailHog)
 docker compose up -d
 
-# Development (Vite dev server + hot reload API)
-docker compose -f docker-compose.dev.yml up
-```
-
-### 4. Run database migrations
-
-```bash
+# Apply database migrations (first time only)
 docker compose exec api alembic upgrade head
 ```
+
+### 4. Start the frontend dev server
+
+The frontend runs separately from Docker using the local Node.js toolchain:
+
+```bash
+cd frontend
+npm install      # first time only
+npm run dev      # starts Vite dev server on http://localhost:5173
+```
+
+> The Vite dev server proxies `/api/*` requests to `http://localhost:8000` automatically.
 
 ### 5. Access the application
 
 | Service | URL |
 |---------|-----|
 | Frontend (dev) | http://localhost:5173 |
-| API Docs | http://localhost:8000/api/docs |
+| API | http://localhost:8000 |
+| API Docs (Swagger UI) | http://localhost:8000/api/docs |
+| Health check | http://localhost:8000/health |
 | MailHog (dev SMTP) | http://localhost:8025 |
 
 ---
@@ -293,6 +310,7 @@ All endpoints are prefixed with `/api/v1`. Interactive docs available at `/api/d
 | `POST` | `/documents/upload` | Upload Form 7501, queue OCR job | Optional | 10/hour |
 | `GET` | `/documents/{job_id}/status` | Poll OCR status + extracted fields | Session/JWT | 60/min |
 | `PATCH` | `/documents/{job_id}/fields` | Save user corrections | Session/JWT | — |
+| `POST` | `/documents/{job_id}/calculate` | Run tariff calculation (BR-001–BR-011), returns `calculation_id` | Session/JWT | 20/min |
 
 **Upload response (202):**
 ```json
@@ -305,6 +323,45 @@ All endpoints are prefixed with `/api/v1`. Interactive docs available at `/api/d
   }
 }
 ```
+
+**Calculate response (202):**
+```json
+{
+  "success": true,
+  "data": { "calculation_id": "uuid" }
+}
+```
+
+### Results
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/results/{calculation_id}` | Retrieve completed calculation result | — |
+
+**Result response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "calculation_id": "uuid",
+    "entry_number": "...",
+    "summary_date": "2026-01-28",
+    "country_of_origin": "CN",
+    "estimated_refund": 1234.56,
+    "refund_pathway": "PROTEST",
+    "days_elapsed": 35,
+    "tariff_lines": [
+      { "tariff_type": "MFN",   "rate": 0.075,   "amount": 375.00, "refundable": false },
+      { "tariff_type": "IEEPA", "rate": 0.20,    "amount": 1000.00,"refundable": true  },
+      { "tariff_type": "MPF",   "rate": 0.003464,"amount": 173.20, "refundable": false },
+      { "tariff_type": "HMF",   "rate": 0.00125, "amount": 62.50,  "refundable": false }
+    ],
+    "total_duty": 1610.70
+  }
+}
+```
+
+> Returns **HTTP 202** while calculation is still in progress (frontend polls until 200).
 
 ### Standard Response Envelope
 
@@ -369,6 +426,8 @@ Referrer-Policy: strict-origin-when-cross-origin
 Permissions-Policy: camera=(), microphone=(), geolocation=()
 Strict-Transport-Security: max-age=31536000; includeSubDomains
 ```
+
+> **Docs exception:** `/api/docs`, `/api/redoc`, and `/api/openapi.json` receive a relaxed `script-src` and `style-src` that also allows `https://cdn.jsdelivr.net` (required by Swagger UI / ReDoc). All other paths use the strict policy above.
 
 ---
 
@@ -464,4 +523,4 @@ python -c "from cryptography.fernet import Fernet; open('data/keys/app_secret.ke
 
 ---
 
-*Prepared by the Office of the CIO, Dimerco Express Group | Version 1.0 | March 2026 | Internal — Confidential*
+*Prepared by the Office of the CIO, Dimerco Express Group | Version 1.1 | March 2026 | Internal — Confidential*

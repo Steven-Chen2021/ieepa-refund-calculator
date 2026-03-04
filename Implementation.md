@@ -321,7 +321,7 @@ python init_keys.py
 
 ## 5. 啟動所有服務
 
-> 這一步會啟動系統所需的所有服務：API 後端、前端介面、資料庫、Redis 快取、Email 測試伺服器等。
+> 這一步會啟動系統所需的後端服務：API、Celery Worker、資料庫、Redis 快取、Email 測試伺服器。前端開發伺服器請另行啟動（見步驟 5.3）。
 
 ### 5.1 確認 Docker Desktop 正在執行
 
@@ -349,15 +349,27 @@ docker compose up -d
  ✔ Container ieepa-refund-calculator-beat-1     Started
 ```
 
-### 5.3 查看服務狀態
+### 5.3 啟動前端開發伺服器（另開終端機視窗）
+
+前端不透過 Docker 執行，需在本機使用 Node.js 啟動：
+
+```bash
+cd frontend
+npm install      # 首次執行才需要（安裝 npm 套件）
+npm run dev
+```
+
+前端伺服器啟動後，前往 **http://localhost:5173** 即可看到介面。
+
+> 💡 Vite 開發伺服器會自動將 `/api/*` 請求代理至 `http://localhost:8000`，不需要額外設定。
+
+### 5.4 查看服務狀態
 
 ```bash
 docker compose ps
 ```
 
 所有服務的 **STATUS** 欄位都應顯示 `Up` 或 `running`。
-
----
 
 ## 6. 建立資料庫結構
 
@@ -421,25 +433,56 @@ INFO  [alembic.runtime.migration] Running upgrade  -> 0001, initial schema
 
 ## 8. 執行第一次測試上傳
 
-> 以下步驟示範如何使用 API 文件介面測試完整的上傳流程。
+> 以下提供兩種測試方式：使用前端介面（推薦）或直接使用 API 文件。
 
-### 8.1 開啟 API 文件
+### 8.1 透過前端介面測試（推薦）
 
-前往 **http://localhost:8000/api/docs**
+確認前端伺服器已啟動（步驟 5.3），前往 **http://localhost:5173**。
 
-### 8.2 測試健康檢查
+完整流程共三步驟：
+
+#### 步驟一：上傳 PDF
+1. 在首頁點選 **「Start Calculation」**（或導覽至 `/calculate`）
+2. 勾選隱私權同意選項
+3. 將 CBP Form 7501 PDF 拖曳至上傳區域（`7501Samples/` 資料夾內有範例檔案）
+4. 點選 **「Start Calculation」**
+5. 系統會自動開始 OCR 讀取，並顯示進度動畫（通常需要 10–30 秒）
+
+#### 步驟二：審核解析結果
+- OCR 完成後，系統自動跳轉至 **審核頁面（/review）**
+- 黃色（琥珀色）框標示信心度不足（< 80%）的欄位，請手動確認或修改
+- 所有欄位確認正確後，點選 **「Confirm & Calculate」**
+
+#### 步驟三：查看退稅結果
+- 計算完成後，系統跳轉至 **結果頁面（/results/:id）**
+- 頁面顯示：
+  - 💰 預估 IEEPA 退稅金額
+  - 退稅途徑徽章（PSC / PROTEST / INELIGIBLE）
+  - 詳細關稅明細表（MFN / IEEPA / S301 / S232 / MPF / HMF）
+  - 申請期限說明與操作建議
+  - 法律免責聲明（必要，不可隱藏）
+
+> ⚠️ **注意：** 若 `tariff_rates` 資料表中無對應的 HTS 稅率資料，IEEPA/MFN/S301/S232 金額將顯示為 $0.00。MPF 和 HMF 使用固定費率，計算不受影響。
+
+---
+
+### 8.2 透過 API 文件測試
+
+> 開啟 **http://localhost:8000/api/docs**
+
+#### 8.2.1 測試健康檢查
 
 1. 在頁面上找到 `GET /health`
 2. 點選它，再點 **"Try it out"**
 3. 點 **"Execute"**
 4. 應看到 **Response Code: 200** 和 `{"status": "ok"}`
 
-### 8.3 上傳 PDF 文件
+#### 8.2.2 上傳 PDF 文件
 
 1. 在頁面上找到 `POST /api/v1/documents/upload`
 2. 點選，再點 **"Try it out"**
 3. 填入以下欄位：
-   - **file**：點選 **"Choose File"**，選擇一份 PDF 或 JPG/PNG 圖片（測試用，可以是任何 PDF）
+   - **file**：點選 **"Choose File"**，選擇一份 PDF（`7501Samples/` 內有範例）
    - **privacy_accepted**：輸入 `true`
    - **X-Idempotency-Key**（在 Header 區）：輸入任意不重複的字串，例如 `test-001`
 4. 點選 **"Execute"**
@@ -456,7 +499,7 @@ INFO  [alembic.runtime.migration] Running upgrade  -> 0001, initial schema
    ```
 6. **複製** `job_id` 的值（你之後需要用到）
 
-### 8.4 查詢 OCR 處理狀態
+#### 8.2.3 查詢 OCR 處理狀態
 
 1. 找到 `GET /api/v1/documents/{job_id}/status`
 2. 點選，再點 **"Try it out"**
@@ -471,7 +514,24 @@ INFO  [alembic.runtime.migration] Running upgrade  -> 0001, initial schema
 
 > 💡 等待 10–30 秒後再查詢，讓 OCR 有時間處理
 
-### 8.5 查看服務執行日誌
+#### 8.2.4 觸發退稅計算
+
+當狀態為 `completed` 或 `review_required` 後：
+
+1. 找到 `POST /api/v1/documents/{job_id}/calculate`
+2. 點選，再點 **"Try it out"**
+3. 填入 `job_id` 並在 Header 加入 `X-Idempotency-Key: calc-test-001`
+4. 點 **"Execute"**
+5. 應看到 **Response Code: 202** 和 `{ "calculation_id": "..." }`
+6. 複製 `calculation_id`
+
+#### 8.2.5 取得計算結果
+
+1. 找到 `GET /api/v1/results/{calculation_id}`
+2. 貼入 `calculation_id`，點 **"Execute"**
+3. 應看到完整的退稅明細，包含 `estimated_refund`、`refund_pathway`、`tariff_lines` 等
+
+### 8.3 查看服務執行日誌
 
 如果遇到問題，可以查看各服務的日誌：
 
@@ -583,12 +643,30 @@ python init_keys.py
 
 ### ❌ 問題：`http://localhost:5173` 無法開啟（前端）
 
-**原因：** 前端容器可能尚未編譯完成（首次啟動較慢）。
+**原因：** 前端 Vite 開發伺服器尚未啟動（前端不在 Docker 中執行，需另行啟動）。
 
-**解決方式：** 等待 1–2 分鐘後重新整理頁面。查看進度：
+**解決方式：** 開啟新的終端機視窗，執行：
 ```bash
-docker compose logs frontend
+cd frontend
+npm install      # 若尚未安裝套件
+npm run dev
 ```
+等待 Vite 顯示 `VITE ready in ... ms` 後再重新整理頁面。
+
+若執行 `npm install` 時出錯，請確認：
+- Node.js 已安裝（`node --version` 應顯示 v18 以上）
+- 你在 `ieepa-refund-calculator/frontend/` 資料夾內
+
+---
+
+### ❌ 問題：點選「Confirm & Calculate」顯示「Failed to submit. Please try again.」
+
+**原因：** 文件狀態不符（非 `completed` 或 `review_required`），或 OCR 尚未完成。
+
+**解決方式：**
+1. 確認 `GET /api/v1/documents/{job_id}/status` 回應的 `status` 為 `completed` 或 `review_required`
+2. 若狀態仍為 `queued`，查看 Worker 日誌：`docker compose logs worker --tail=50`
+3. 若狀態為 `failed`，請重新上傳文件
 
 ---
 
@@ -669,7 +747,8 @@ docker compose down && docker compose up -d
 
 | 目的 | 指令 |
 |------|------|
-| 啟動所有服務 | `docker compose up -d` |
+| 啟動所有後端服務 | `docker compose up -d` |
+| 啟動前端開發伺服器 | `cd frontend && npm run dev` |
 | 停止服務（保留資料） | `docker compose stop` |
 | 停止並清除容器 | `docker compose down` |
 | 查看所有服務狀態 | `docker compose ps` |
@@ -679,7 +758,9 @@ docker compose down && docker compose up -d
 | 執行資料庫 Migration | `docker compose exec api alembic upgrade head` |
 | 重建所有映像檔 | `docker compose build --no-cache` |
 | 完全重置（清空資料） | `docker compose down -v` |
+| 前端型別檢查 | `cd frontend && npx tsc --noEmit` |
+| 執行前端測試 | `cd frontend && npm run test` |
 
 ---
 
-*Prepared by the Office of the CIO, Dimerco Express Group | Version 1.0 | March 2026 | Internal — Confidential*
+*Prepared by the Office of the CIO, Dimerco Express Group | Version 1.1 | March 2026 | Internal — Confidential*
