@@ -1,0 +1,140 @@
+# ═══════════════════════════════════════════════════════════════════
+#  .gitignore — IEEPA Refund Calculator (Dimerco Express Group)
+#  Covers: Python · FastAPI · Celery · Node.js · React/Vite · Docker
+# ═══════════════════════════════════════════════════════════════════
+
+# ── Secrets & environment variables ────────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+credentials/
+*.service-account.json
+
+# data/keys stores Fernet encryption key — NEVER commit
+data/keys/
+
+# ── Python ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+*.manifest
+*.spec
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.Python
+pip-wheel-metadata/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+junit*.xml
+
+# mypy / pyright / ruff
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+.ruff_cache/
+
+# bandit (security linter)
+.bandit
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# ── Node.js ─────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.yarn/
+.pnp.*
+package-lock.json.bak
+
+# ── React / Vite ────────────────────────────────────────────────────
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/build/
+*.local
+
+# Vitest / Playwright
+frontend/coverage/
+frontend/test-results/
+playwright-report/
+playwright/.cache/
+e2e/test-results/
+e2e/playwright-report/
+
+# ── TypeScript ──────────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ── Docker ──────────────────────────────────────────────────────────
+# Keep Dockerfile and docker-compose.yml; ignore local overrides
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ── Data directories (uploaded files & PDF reports) ────────────────
+# These are runtime artefacts; stored under /data volume on host
+data/uploads/
+data/reports/
+data/keys/
+
+# ── Logs ────────────────────────────────────────────────────────────
+*.log
+logs/
+*.out
+
+# ── OS artefacts ────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ── Editor / IDE ────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ── Misc ────────────────────────────────────────────────────────────
+*.bak
+*.tmp
+*.orig
+.cache/
+.sass-cache/
