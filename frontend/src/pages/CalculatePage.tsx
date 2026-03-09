@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { calculate, getJobStatus, uploadDocument } from '../api/documents'
 import StepIndicator from '../components/ui/StepIndicator'
+import type { UploadStatus } from '../store/uploadStore'
 import { useUploadStore } from '../store/uploadStore'
 
 const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png']
@@ -32,6 +33,15 @@ export default function CalculatePage(): JSX.Element {
 
   const [privacyAccepted, setPrivacyAccepted] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Reset stale state when the user navigates back to this page
+  useEffect(() => {
+    const terminalStates: UploadStatus[] = ['completed', 'review_required', 'calculating']
+    if (terminalStates.includes(status)) {
+      reset()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Clean up polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
@@ -145,7 +155,7 @@ export default function CalculatePage(): JSX.Element {
         <input {...getInputProps()} />
 
         {!isProcessing && status !== 'ready' && (
-          <>
+          <div className="pointer-events-none">
             <div className="text-5xl mb-4">{isDragActive ? '📂' : '⬆️'}</div>
             <p className="text-navy-blue font-heading font-semibold mb-1">
               {isDragActive ? t('calculate.dropzone_active') : t('calculate.dropzone_title')}
@@ -155,12 +165,12 @@ export default function CalculatePage(): JSX.Element {
               <span className="text-logo-blue underline">{t('calculate.dropzone_browse')}</span>
             </p>
             <p className="text-xs text-brand-gray">{t('calculate.dropzone_hint')}</p>
-          </>
+          </div>
         )}
 
         {/* File selected preview */}
         {status === 'ready' && file && (
-          <div className="flex flex-col items-center gap-3">
+          <div className="pointer-events-none flex flex-col items-center gap-3">
             <div className="text-5xl">
               {file.type === 'application/pdf' ? '📄' : '🖼️'}
             </div>
@@ -186,7 +196,7 @@ export default function CalculatePage(): JSX.Element {
 
         {/* Processing state */}
         {isProcessing && (
-          <div className="flex flex-col items-center gap-4">
+          <div className="pointer-events-none flex flex-col items-center gap-4">
             {/* Progress steps */}
             <div className="flex items-center gap-2 text-xs font-medium">
               {[t('calculate.uploading'), t('calculate.queued'), t('calculate.processing')].map(
