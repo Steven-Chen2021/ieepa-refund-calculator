@@ -2,9 +2,40 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { calculate, getJobStatus, patchFields } from '../api/documents'
-import type { ExtractedFields, OcrField } from '../api/documents'
+import type { ExtractedFields, LineItem, OcrField } from '../api/documents'
 import StepIndicator from '../components/ui/StepIndicator'
 import { useUploadStore } from '../store/uploadStore'
+
+/** Derive display colour from OcrField confidence per 7501_Parse.md §3 */
+function fieldColour(field: OcrField | undefined, edited: boolean): 'normal' | 'amber' | 'red' {
+  if (edited || !field) return 'normal'
+  if (field.read_failed || field.confidence < 0.5) return 'red'
+  if (field.review_required || field.confidence < 0.85) return 'amber'
+  return 'normal'
+}
+
+function TariffTypeBadge({ category }: { category: string }): JSX.Element {
+  const { t } = useTranslation()
+  if (category === 'IEEPA') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-logo-orange-dark border border-logo-orange">
+        ★ {t('review.ieepa_target')}
+      </span>
+    )
+  }
+  if (category === 'S301') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-logo-orange-dark border border-logo-orange">
+        {t('review.s301_label')}
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-brand-gray">
+      {t('review.main_label')}
+    </span>
+  )
+}
 
 function FieldCell({
   field,
@@ -20,14 +51,14 @@ function FieldCell({
 
   if (!field) return <span className="text-gray-400">—</span>
 
-  const amber = field.review_required && !edited
+  const colour = fieldColour(field, edited)
   const pct = Math.round((field.confidence ?? 0) * 100)
 
   if (editing) {
     return (
       <input
         autoFocus
-        className="border border-blue-400 rounded px-2 py-1 text-sm w-full"
+        className="border border-logo-blue rounded px-2 py-1 text-sm w-full font-mono text-navy-blue outline-none ring-1 ring-logo-blue"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
@@ -40,11 +71,34 @@ function FieldCell({
     )
   }
 
+  const borderCls =
+    colour === 'red'
+      ? 'border-error bg-red-50'
+      : colour === 'amber'
+        ? 'border-logo-orange bg-orange-50'
+        : 'border-transparent hover:border-brand-gray'
+
+  const hintCls =
+    colour === 'red'
+      ? 'text-error'
+      : colour === 'amber'
+        ? 'text-logo-orange-dark'
+        : edited
+          ? 'text-logo-blue'
+          : 'text-brand-gray'
+
+  const hintText =
+    edited
+      ? `✏ ${t('review.edited')}`
+      : colour === 'red'
+        ? `✗ ${t('review.read_failed')}`
+        : colour === 'amber'
+          ? `⚠ ${t('review.confidence', { pct })}`
+          : `✓ ${t('review.confidence', { pct })}`
+
   return (
     <div
-      className={`group cursor-pointer rounded px-2 py-1 border transition-colors
-        ${amber ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:border-gray-300'}
-      `}
+      className={`group cursor-pointer rounded px-2 py-1 border transition-colors ${borderCls}`}
       onClick={() => setEditing(true)}
       role="button"
       tabIndex={0}
@@ -52,13 +106,7 @@ function FieldCell({
       aria-label={`Edit field, current value: ${draft}`}
     >
       <p className="text-sm font-medium">{draft || '—'}</p>
-      <p className={`text-xs mt-0.5 ${amber ? 'text-amber-600' : edited ? 'text-blue-600' : 'text-gray-400'}`}>
-        {edited
-          ? `✏ ${t('review.edited')}`
-          : amber
-            ? `⚠ ${t('review.confidence', { pct })}`
-            : `✓ ${t('review.confidence', { pct })}`}
-      </p>
+      <p className={`text-xs mt-0.5 ${hintCls}`}>{hintText}</p>
     </div>
   )
 }
@@ -87,13 +135,13 @@ export default function ReviewPage(): JSX.Element {
   const amberCount =
     fields
       ? Object.entries(fields)
-          .filter(([k, v]) => k !== 'line_items' && (v as OcrField)?.review_required)
+          .filter(([k, v]) => k !== 'line_items' && k !== 'review_required_count' && (v as OcrField)?.review_required)
           .length +
         (fields.line_items?.reduce(
           (acc, li) =>
             acc +
             Object.values(li)
-              .filter((f): f is OcrField => typeof f === 'object' && 'review_required' in f)
+              .filter((f): f is OcrField => typeof f === 'object' && f !== null && 'review_required' in f)
               .filter((f) => f.review_required).length,
           0,
         ) ?? 0)
@@ -117,55 +165,71 @@ export default function ReviewPage(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8 text-center text-gray-500">
-        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto mb-4" />
+      <div className="max-w-4xl mx-auto px-4 py-8 text-center text-brand-gray font-body">
+        <div className="w-8 h-8 border-4 border-gray-200 border-t-navy-blue rounded-full animate-spin mx-auto mb-4" />
         {t('common.loading')}
       </div>
     )
   }
 
+  // ── Header field config: [i18nKey, fieldKey] ──────────────────────────────
+  const headerFieldDefs: [string, keyof ExtractedFields][] = [
+    ['review.filer_code',    'filer_code'],
+    ['review.entry_number',  'entry_number'],
+    ['review.entry_type',    'entry_type'],
+    ['review.summary_date',  'summary_date'],
+    ['review.import_date',   'import_date'],
+    ['review.bl_number',     'bl_number'],
+    ['review.country_origin','country_of_origin'],
+    ['review.importer',      'importer_name'],
+    ['review.transport',     'mode_of_transport'],
+    ['review.port',          'port_of_entry'],
+    ['review.total_duty_ocr','total_duty'],
+  ]
+
+  // Group line items by line_number for visual separation (7501_Parse.md §2B)
+  const groupedLines: Map<number | string, LineItem[]> = new Map()
+  fields?.line_items?.forEach((li, idx) => {
+    const key = li.line_number ?? idx
+    const group = groupedLines.get(key) ?? []
+    group.push(li)
+    groupedLines.set(key, group)
+  })
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-4 py-8 font-body text-navy-blue">
       <StepIndicator current={2} />
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">{t('review.title')}</h1>
-      <p className="text-gray-500 text-sm mb-6">{t('review.subtitle')}</p>
+      <h1 className="text-2xl font-heading font-semibold text-navy-blue mb-1">{t('review.title')}</h1>
+      <p className="text-dark-gray text-sm mb-6">{t('review.subtitle')}</p>
 
       {/* Amber warning banner */}
       {amberCount > 0 && (
-        <div className="mb-6 flex items-center gap-3 bg-amber-50 border border-amber-300 text-amber-800 rounded-xl p-4 text-sm font-medium">
+        <div className="mb-6 flex items-center gap-3 bg-orange-50 border border-logo-orange text-logo-orange-dark rounded-none rounded-br-lg p-4 text-sm font-medium">
           <span className="text-lg">⚠️</span>
           {t('review.amber_warning_other', { count: amberCount })}
         </div>
       )}
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">
+        <div className="mb-4 bg-red-50 border border-error text-error rounded-none rounded-br-lg p-4 text-sm">
           {error}
         </div>
       )}
 
       {/* Header fields */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
+      <div className="bg-white border border-gray-200 rounded-none rounded-br-lg p-5 mb-6 shadow-sm">
+        <h2 className="text-sm font-heading font-semibold text-dark-gray uppercase tracking-wide mb-4">
           {t('review.header_fields')}
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            ['review.entry_number', 'entry_number'],
-            ['review.summary_date', 'summary_date'],
-            ['review.country_origin', 'country_of_origin'],
-            ['review.entry_type', 'entry_type'],
-            ['review.importer', 'importer_name'],
-            ['review.transport', 'mode_of_transport'],
-            ['review.port', 'port_of_entry'],
-          ].map(([labelKey, fieldKey]) => (
+          {headerFieldDefs.map(([labelKey, fieldKey]) => (
             <div key={fieldKey}>
-              <label className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+              <label className="text-xs text-brand-gray font-medium uppercase tracking-wide">
                 {t(labelKey)}
               </label>
               <FieldCell
-                field={fields?.[fieldKey as keyof ExtractedFields] as OcrField | undefined}
+                field={fields?.[fieldKey] as OcrField | undefined}
                 onEdit={(v) => setField(fieldKey, v)}
               />
             </div>
@@ -173,54 +237,81 @@ export default function ReviewPage(): JSX.Element {
         </div>
       </div>
 
-      {/* Line items */}
+      {/* Line items grouped by line_number (Box 27/29/33) */}
       {fields?.line_items && fields.line_items.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6 shadow-sm">
-          <div className="px-5 py-3 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+        <div className="bg-white border border-gray-200 rounded-none rounded-br-lg overflow-hidden mb-6 shadow-sm">
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+            <h2 className="text-sm font-heading font-semibold text-dark-gray uppercase tracking-wide">
               {t('review.line_items')}
             </h2>
+            <span className="ml-auto flex items-center gap-1 text-xs text-logo-orange bg-orange-50 border border-logo-orange px-2 py-0.5 rounded-full font-bold">
+              ★ {t('review.ieepa_target')}
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-gray-white border-b border-gray-200">
                 <tr>
-                  {['col_line', 'col_hts', 'col_value', 'col_rate', 'col_amount'].map((k) => (
-                    <th key={k} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  {(['col_line','col_hts','col_tariff_type','col_value','col_rate','col_amount'] as const).map((k) => (
+                    <th key={k} className="px-4 py-2 text-left text-xs font-heading font-semibold text-dark-gray uppercase tracking-wide">
                       {t(`review.${k}`)}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {fields.line_items.map((li, idx) => (
-                  <tr key={idx} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                    <td className="px-4 py-2 text-gray-400 font-mono">{li.line_number}</td>
-                    <td className="px-4 py-2 font-mono">
-                      <FieldCell
-                        field={li.hts_code}
-                        onEdit={(v) => setField(`line_items[${idx}].hts_code`, v)}
-                      />
-                    </td>
-                    <td className="px-4 py-2">
-                      <FieldCell
-                        field={li.entered_value}
-                        onEdit={(v) => setField(`line_items[${idx}].entered_value`, v)}
-                      />
-                    </td>
-                    <td className="px-4 py-2">
-                      <FieldCell
-                        field={li.duty_rate}
-                        onEdit={(v) => setField(`line_items[${idx}].duty_rate`, v)}
-                      />
-                    </td>
-                    <td className="px-4 py-2">
-                      <FieldCell
-                        field={li.duty_amount}
-                        onEdit={(v) => setField(`line_items[${idx}].duty_amount`, v)}
-                      />
-                    </td>
-                  </tr>
+                {Array.from(groupedLines.entries()).map(([lineKey, group]) => (
+                  group.map((li, rowIdx) => {
+                    const isIeepa = li.is_ieepa
+                    const isFirstInGroup = rowIdx === 0
+                    const isLastInGroup = rowIdx === group.length - 1
+                    return (
+                      <tr
+                        key={`${lineKey}-${rowIdx}`}
+                        className={[
+                          isIeepa ? 'bg-orange-50' : 'hover:bg-gray-50',
+                          isLastInGroup ? 'border-b-2 border-gray-200' : 'border-b border-gray-100',
+                        ].join(' ')}
+                      >
+                        <td className="px-4 py-2 text-brand-gray font-mono">
+                          {isFirstInGroup ? lineKey : ''}
+                        </td>
+                        <td className="px-4 py-2 font-mono">
+                          <FieldCell
+                            field={li.hts_code}
+                            onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].hts_code`, v)}
+                          />
+                        </td>
+                        <td className="px-4 py-2">
+                          <TariffTypeBadge category={li.tariff_category} />
+                        </td>
+                        <td className="px-4 py-2">
+                          {li.entered_value ? (
+                            <FieldCell
+                              field={li.entered_value}
+                              onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].entered_value`, v)}
+                            />
+                          ) : <span className="text-brand-gray">—</span>}
+                        </td>
+                        <td className="px-4 py-2">
+                          {li.duty_rate ? (
+                            <FieldCell
+                              field={li.duty_rate}
+                              onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].duty_rate`, v)}
+                            />
+                          ) : <span className="text-brand-gray">—</span>}
+                        </td>
+                        <td className="px-4 py-2">
+                          {li.duty_amount ? (
+                            <FieldCell
+                              field={li.duty_amount}
+                              onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].duty_amount`, v)}
+                            />
+                          ) : <span className="text-brand-gray">—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })
                 ))}
               </tbody>
             </table>
@@ -232,15 +323,15 @@ export default function ReviewPage(): JSX.Element {
       <div className="flex justify-between mt-4">
         <button
           onClick={() => navigate('/calculate')}
-          className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+          className="px-4 py-2 text-sm text-dark-gray border border-brand-gray bg-transparent font-heading font-semibold rounded-none hover:bg-gray-50 transition-colors"
         >
           {t('review.btn_back')}
         </button>
         <button
           onClick={handleConfirm}
           disabled={submitting}
-          className={`flex items-center gap-2 px-6 py-3 font-semibold rounded-xl text-white transition-colors
-            ${submitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-800 hover:bg-blue-700'}`}
+          className={`flex items-center gap-2 px-6 py-3 font-heading font-semibold rounded-none rounded-br-lg text-white transition-opacity shadow-sm
+            ${submitting ? 'bg-brand-gray cursor-not-allowed' : 'bg-gradient-to-b from-logo-orange to-logo-orange-dark hover:opacity-90 active:opacity-100'}`}
         >
           {submitting && (
             <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

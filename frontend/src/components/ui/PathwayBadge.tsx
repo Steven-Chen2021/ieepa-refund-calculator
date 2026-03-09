@@ -10,20 +10,20 @@ const CONFIG: Record<RefundPathway, { badgeKey: string; bg: string; text: string
   PSC: {
     badgeKey: 'results.psc_badge',
     bg: 'bg-green-100',
-    text: 'text-green-800',
-    border: 'border-green-300',
+    text: 'text-success-dark',
+    border: 'border-success',
   },
   PROTEST: {
     badgeKey: 'results.protest_badge',
-    bg: 'bg-amber-100',
-    text: 'text-amber-800',
-    border: 'border-amber-300',
+    bg: 'bg-orange-100',
+    text: 'text-logo-orange-dark',
+    border: 'border-logo-orange',
   },
   INELIGIBLE: {
     badgeKey: 'results.ineligible_badge',
     bg: 'bg-red-100',
-    text: 'text-red-800',
-    border: 'border-red-300',
+    text: 'text-error',
+    border: 'border-error',
   },
 }
 

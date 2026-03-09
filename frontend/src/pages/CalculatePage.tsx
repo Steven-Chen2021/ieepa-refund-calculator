@@ -110,19 +110,19 @@ export default function CalculatePage(): JSX.Element {
     status === 'uploading' ? 0 : status === 'queued' || status === 'processing' ? 1 : 2
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <div className="max-w-2xl mx-auto px-4 py-8 font-body text-navy-blue">
       <StepIndicator current={1} />
 
       {/* Privacy notice */}
-      <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-5">
-        <h2 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+      <div className="mb-6 bg-gray-white border border-gray-200 rounded-none rounded-br-lg p-5">
+        <h2 className="font-heading font-semibold text-navy-blue mb-2 flex items-center gap-2">
           <span>📋</span> {t('calculate.privacy_title')}
         </h2>
-        <p className="text-sm text-blue-800 mb-4">{t('calculate.privacy_text')}</p>
-        <label className="flex items-start gap-2 cursor-pointer select-none text-sm text-blue-900 font-medium">
+        <p className="text-sm text-dark-gray mb-4">{t('calculate.privacy_text')}</p>
+        <label className="flex items-start gap-2 cursor-pointer select-none text-sm text-navy-blue font-medium">
           <input
             type="checkbox"
-            className="mt-0.5 accent-blue-800 w-4 h-4"
+            className="mt-0.5 accent-navy-blue w-4 h-4"
             checked={privacyAccepted}
             onChange={(e) => setPrivacyAccepted(e.target.checked)}
           />
@@ -133,12 +133,12 @@ export default function CalculatePage(): JSX.Element {
       {/* Drop zone */}
       <div
         {...getRootProps()}
-        className={`relative border-2 border-dashed rounded-xl p-10 text-center transition-colors
-          ${!privacyAccepted ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50' : ''}
-          ${privacyAccepted && !isProcessing && status !== 'ready' ? 'border-blue-300 bg-blue-50 hover:border-blue-500 cursor-pointer' : ''}
-          ${isDragActive ? 'border-blue-600 bg-blue-100' : ''}
-          ${status === 'ready' ? 'border-green-400 bg-green-50 cursor-pointer' : ''}
-          ${isProcessing ? 'border-gray-200 bg-gray-50 cursor-default' : ''}
+        className={`relative border-2 border-dashed rounded-none rounded-br-lg p-10 text-center transition-colors
+          ${!privacyAccepted ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-white' : ''}
+          ${privacyAccepted && !isProcessing && status !== 'ready' ? 'border-logo-blue bg-gray-white hover:border-navy-blue cursor-pointer' : ''}
+          ${isDragActive ? 'border-navy-blue bg-gray-100' : ''}
+          ${status === 'ready' ? 'border-success bg-green-50 cursor-pointer' : ''}
+          ${isProcessing ? 'border-gray-200 bg-gray-white cursor-default' : ''}
         `}
         title={!privacyAccepted ? t('calculate.dropzone_disabled_tip') : undefined}
       >
@@ -147,14 +147,14 @@ export default function CalculatePage(): JSX.Element {
         {!isProcessing && status !== 'ready' && (
           <>
             <div className="text-5xl mb-4">{isDragActive ? '📂' : '⬆️'}</div>
-            <p className="text-gray-700 font-medium mb-1">
+            <p className="text-navy-blue font-heading font-semibold mb-1">
               {isDragActive ? t('calculate.dropzone_active') : t('calculate.dropzone_title')}
             </p>
-            <p className="text-gray-400 text-sm mb-4">
+            <p className="text-brand-gray text-sm mb-4">
               {t('calculate.dropzone_or')}{' '}
-              <span className="text-blue-700 underline">{t('calculate.dropzone_browse')}</span>
+              <span className="text-logo-blue underline">{t('calculate.dropzone_browse')}</span>
             </p>
-            <p className="text-xs text-gray-400">{t('calculate.dropzone_hint')}</p>
+            <p className="text-xs text-brand-gray">{t('calculate.dropzone_hint')}</p>
           </>
         )}
 
@@ -164,19 +164,19 @@ export default function CalculatePage(): JSX.Element {
             <div className="text-5xl">
               {file.type === 'application/pdf' ? '📄' : '🖼️'}
             </div>
-            <div className="w-full max-w-xs bg-white border border-green-200 rounded-lg p-4 text-left text-sm shadow-sm">
-              <p className="font-semibold text-gray-800 mb-2">{t('calculate.file_selected')}</p>
-              <div className="space-y-1 text-gray-600">
+            <div className="w-full max-w-xs bg-white border border-success rounded-none rounded-br-lg p-4 text-left text-sm shadow-sm">
+              <p className="font-semibold text-navy-blue mb-2">{t('calculate.file_selected')}</p>
+              <div className="space-y-1 text-dark-gray">
                 <div className="flex justify-between">
-                  <span className="text-gray-400">{t('calculate.file_name')}</span>
+                  <span className="text-brand-gray">{t('calculate.file_name')}</span>
                   <span className="font-medium truncate max-w-[160px]">{file.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">{t('calculate.file_size')}</span>
+                  <span className="text-brand-gray">{t('calculate.file_size')}</span>
                   <span className="font-medium">{formatBytes(file.size)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">{t('calculate.file_type')}</span>
+                  <span className="text-brand-gray">{t('calculate.file_type')}</span>
                   <span className="font-medium">{file.type || '—'}</span>
                 </div>
               </div>
@@ -193,19 +193,19 @@ export default function CalculatePage(): JSX.Element {
                 (label, i) => (
                   <div key={label} className="flex items-center gap-1">
                     <span
-                      className={`w-2 h-2 rounded-full ${i <= progressStep ? 'bg-blue-600' : 'bg-gray-300'}`}
+                      className={`w-2 h-2 rounded-full ${i <= progressStep ? 'bg-logo-orange' : 'bg-brand-gray'}`}
                     />
-                    <span className={i <= progressStep ? 'text-blue-700' : 'text-gray-400'}>
+                    <span className={i <= progressStep ? 'text-logo-orange' : 'text-brand-gray'}>
                       {label}
                     </span>
-                    {i < 2 && <span className="text-gray-300 mx-1">──</span>}
+                    {i < 2 && <span className="text-brand-gray mx-1">──</span>}
                   </div>
                 ),
               )}
             </div>
             {/* Spinner */}
-            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin" />
-            <p className="text-gray-600 text-sm">
+            <div className="w-10 h-10 border-4 border-gray-200 border-t-logo-orange rounded-full animate-spin" />
+            <p className="text-dark-gray text-sm">
               {status === 'uploading'
                 ? t('calculate.uploading')
                 : status === 'queued'
@@ -215,7 +215,7 @@ export default function CalculatePage(): JSX.Element {
                     : t('calculate.processing')}
             </p>
             {file && (
-              <p className="text-xs text-gray-400 truncate max-w-xs">{file.name}</p>
+              <p className="text-xs text-brand-gray truncate max-w-xs">{file.name}</p>
             )}
           </div>
         )}
@@ -223,14 +223,14 @@ export default function CalculatePage(): JSX.Element {
 
       {/* Error banner */}
       {status === 'failed' && errorText && (
-        <div className="mt-4 flex items-start gap-3 bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 text-sm">
+        <div className="mt-4 flex items-start gap-3 bg-red-50 border border-error text-error rounded-none rounded-br-lg p-4 text-sm">
           <span className="text-lg">⚠️</span>
           <div className="flex-1">
             <p className="font-medium">{errorText}</p>
           </div>
           <button
             onClick={() => reset()}
-            className="ml-auto px-3 py-1.5 bg-red-700 text-white rounded-lg text-xs font-medium hover:bg-red-800"
+            className="ml-auto px-3 py-1.5 bg-error text-white rounded-none rounded-br-lg text-xs font-heading font-semibold hover:opacity-90"
           >
             {t('calculate.btn_retry')}
           </button>
@@ -243,7 +243,7 @@ export default function CalculatePage(): JSX.Element {
           {status === 'ready' && (
             <button
               onClick={() => setFile(null)}
-              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm text-logo-orange border border-logo-orange bg-transparent font-heading font-semibold rounded-none hover:bg-orange-50"
             >
               {t('calculate.btn_change')}
             </button>
@@ -251,10 +251,10 @@ export default function CalculatePage(): JSX.Element {
           <button
             disabled={status !== 'ready'}
             onClick={handleUpload}
-            className={`px-6 py-3 font-semibold rounded-xl text-white transition-colors
+            className={`px-6 py-3 font-heading font-semibold rounded-none rounded-br-lg text-white transition-opacity shadow-sm
               ${status === 'ready'
-                ? 'bg-blue-800 hover:bg-blue-700 active:bg-blue-900 shadow-sm'
-                : 'bg-gray-300 cursor-not-allowed'
+                ? 'bg-gradient-to-b from-logo-orange to-logo-orange-dark hover:opacity-90 active:opacity-100'
+                : 'bg-brand-gray cursor-not-allowed'
               }`}
           >
             {t('calculate.btn_start')}
@@ -264,7 +264,7 @@ export default function CalculatePage(): JSX.Element {
 
       {/* Allowed types reminder */}
       {!ALLOWED_MIME.includes(file?.type ?? '') && !file && (
-        <p className="mt-4 text-center text-xs text-gray-400">{t('calculate.dropzone_hint')}</p>
+        <p className="mt-4 text-center text-xs text-brand-gray">{t('calculate.dropzone_hint')}</p>
       )}
     </div>
   )

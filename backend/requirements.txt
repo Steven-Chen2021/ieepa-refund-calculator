@@ -27,6 +27,8 @@ google-cloud-documentai==2.29.0
 pytesseract==0.3.10
 pdf2image==1.17.0
 Pillow==10.4.0
+pdfplumber==0.11.4
+pdfminer.six==20231228
 
 # ── PDF Generation ───────────────────────────────────────
 weasyprint==62.3

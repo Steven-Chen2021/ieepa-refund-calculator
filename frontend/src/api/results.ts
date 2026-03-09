@@ -12,7 +12,10 @@ export interface TariffLine {
 export interface CalculationResult {
   calculation_id: string
   entry_number: string
+  filer_code?: string
   summary_date: string
+  import_date?: string   // Box 11
+  bl_number?: string     // Box 12
   country_of_origin: string
   port_of_entry: string
   importer_name: string

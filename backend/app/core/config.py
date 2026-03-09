@@ -88,7 +88,10 @@ class Settings(BaseSettings):
     GOOGLE_DOC_AI_PROCESSOR_ID: str = ""
     TESSERACT_CMD: str = "/usr/bin/tesseract"
     OCR_FALLBACK_ENABLED: bool = True
-    OCR_CONFIDENCE_THRESHOLD: float = 0.80
+    # BR-010 / 7501_Parse.md: fields below this threshold are flagged review_required
+    OCR_CONFIDENCE_THRESHOLD: float = 0.85
+    # 7501_Parse.md §3: fields below this threshold are marked read_failed (red)
+    OCR_FAILED_THRESHOLD: float = 0.50
 
     # ── Email ────────────────────────────────────────────────
     SMTP_HOST: str = "mailhog"
