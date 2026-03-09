@@ -91,9 +91,12 @@ async def get_result(
         "data": {
             "calculation_id": str(calc.id),
             "entry_number": calc.entry_number or extra.get("entry_number", ""),
+            "filer_code": extra.get("filer_code", ""),
             "summary_date": (
                 calc.summary_date.isoformat() if calc.summary_date else extra.get("summary_date", "")
             ),
+            "import_date": extra.get("import_date", ""),
+            "bl_number": extra.get("bl_number", ""),
             "country_of_origin": calc.country_of_origin or extra.get("country_of_origin", ""),
             "port_of_entry": extra.get("port_code", "") or extra.get("port_of_entry", ""),
             "importer_name": calc.importer_name or extra.get("importer_name", ""),
