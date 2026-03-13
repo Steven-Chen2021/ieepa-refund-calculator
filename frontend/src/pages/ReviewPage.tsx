@@ -10,7 +10,7 @@ import { useUploadStore } from '../store/uploadStore'
 function fieldColour(field: OcrField | undefined, edited: boolean): 'normal' | 'amber' | 'red' {
   if (edited || !field) return 'normal'
   if (field.read_failed || field.confidence < 0.5) return 'red'
-  if (field.review_required || field.confidence < 0.85) return 'amber'
+  if (field.review_required || field.confidence < 0.80) return 'amber'
   return 'normal'
 }
 
@@ -252,7 +252,7 @@ export default function ReviewPage(): JSX.Element {
             <table className="w-full text-sm">
               <thead className="bg-gray-white border-b border-gray-200">
                 <tr>
-                  {(['col_line','col_hts','col_tariff_type','col_value','col_rate','col_amount'] as const).map((k) => (
+                  {(['col_line','col_hts','col_tariff_type','col_rate','col_amount'] as const).map((k) => (
                     <th key={k} className="px-4 py-2 text-left text-xs font-heading font-semibold text-dark-gray uppercase tracking-wide">
                       {t(`review.${k}`)}
                     </th>
@@ -284,14 +284,6 @@ export default function ReviewPage(): JSX.Element {
                         </td>
                         <td className="px-4 py-2">
                           <TariffTypeBadge category={li.tariff_category} />
-                        </td>
-                        <td className="px-4 py-2">
-                          {li.entered_value ? (
-                            <FieldCell
-                              field={li.entered_value}
-                              onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].entered_value`, v)}
-                            />
-                          ) : <span className="text-brand-gray">—</span>}
                         </td>
                         <td className="px-4 py-2">
                           {li.duty_rate ? (

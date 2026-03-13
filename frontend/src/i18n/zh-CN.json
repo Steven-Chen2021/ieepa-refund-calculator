@@ -107,6 +107,8 @@
     "importer": "進口商",
     "transport": "運輸方式",
     "duty_breakdown": "關稅明細",
+    "line_detail": "商品明細",
+    "col_hts": "HTS 商品稅號",
     "col_component": "稅項",
     "col_rate": "稅率",
     "col_amount": "金額",

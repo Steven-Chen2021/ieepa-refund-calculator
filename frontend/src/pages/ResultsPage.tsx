@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getResult } from '../api/results'
-import type { CalculationResult, TariffLine } from '../api/results'
+import type { CalculationResult, DutyLineComponent, TariffLine } from '../api/results'
 import PathwayBadge from '../components/ui/PathwayBadge'
 import StepIndicator from '../components/ui/StepIndicator'
 
@@ -87,6 +87,18 @@ export default function ResultsPage(): JSX.Element {
   const sortedLines = [...result.tariff_lines].sort(
     (a, b) => ORDER.indexOf(a.tariff_type) - ORDER.indexOf(b.tariff_type),
   )
+
+  // Group per-HTS line components for detail table
+  const COMP_ORDER = ['MFN', 'IEEPA', 'S301', 'S232']
+  const linesByHts = new Map<string, DutyLineComponent[]>()
+  for (const comp of result.line_duty_components ?? []) {
+    if (!linesByHts.has(comp.hts_code)) linesByHts.set(comp.hts_code, [])
+    linesByHts.get(comp.hts_code)!.push(comp)
+  }
+  for (const comps of linesByHts.values()) {
+    comps.sort((a, b) => COMP_ORDER.indexOf(a.tariff_type) - COMP_ORDER.indexOf(b.tariff_type))
+  }
+  const htsGroups = Array.from(linesByHts.entries())
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 font-body text-navy-blue">
@@ -208,8 +220,79 @@ export default function ResultsPage(): JSX.Element {
         </div>
       </div>
 
-      {/* ── Pathway explanation ─────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-none rounded-br-lg p-5 mb-6 shadow-sm">
+      {/* ── Line item detail table ─────────────────────────── */}
+      {htsGroups.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-none rounded-br-lg overflow-hidden mb-6 shadow-sm">
+          <div className="px-5 py-3 border-b border-gray-100">
+            <h2 className="text-sm font-heading font-semibold text-dark-gray uppercase tracking-wide">
+              {t('results.line_detail')}
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-white border-b border-gray-200">
+                <tr>
+                  {[
+                    t('results.col_hts'),
+                    t('results.col_component'),
+                    t('results.col_rate'),
+                    t('results.col_amount'),
+                    t('results.col_refundable'),
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-2 text-left text-xs font-heading font-semibold text-dark-gray uppercase tracking-wide"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {htsGroups.map(([htsCode, comps], groupIdx) =>
+                  comps.map((comp, rowIdx) => {
+                    const isIeepa = comp.tariff_type === 'IEEPA'
+                    const labelKey = `results.${comp.tariff_type.toLowerCase() as 'mfn' | 'ieepa' | 's301' | 's232'}`
+                    const isFirstRow = rowIdx === 0
+                    const isLastRow = rowIdx === comps.length - 1
+                    const isLastGroup = groupIdx === htsGroups.length - 1
+                    return (
+                      <tr
+                        key={`${htsCode}-${comp.tariff_type}`}
+                        className={`
+                          ${isIeepa ? 'bg-orange-50' : 'hover:bg-gray-50'}
+                          ${!isLastRow || !isLastGroup ? 'border-b border-gray-100' : ''}
+                          ${isFirstRow && groupIdx > 0 ? 'border-t-2 border-gray-200' : ''}
+                        `}
+                      >
+                        <td className="px-4 py-2.5 font-mono text-xs text-brand-gray">
+                          {isFirstRow ? htsCode : ''}
+                        </td>
+                        <td className="px-4 py-2.5 font-medium">
+                          <span className={isIeepa ? 'text-logo-orange-dark' : 'text-navy-blue'}>
+                            {isIeepa && '★ '}{t(labelKey as never)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-dark-gray">{pct(comp.rate)}</td>
+                        <td className="px-4 py-2.5 font-mono">{usd(comp.amount)}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          {comp.refundable ? (
+                            <span className="text-success font-bold">{t('results.yes')}</span>
+                          ) : (
+                            <span className="text-brand-gray">{t('results.no')}</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pathway explanation ─────────────────────────────── */}      <div className="bg-white border border-gray-200 rounded-none rounded-br-lg p-5 mb-6 shadow-sm">
         <div className="flex items-center gap-3 mb-3">
           <PathwayBadge pathway={result.refund_pathway} large />
           <span className="font-heading font-semibold text-navy-blue">{t(pathwayNameKey as never)}</span>

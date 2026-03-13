@@ -107,6 +107,8 @@
     "importer": "Importer",
     "transport": "Transport",
     "duty_breakdown": "Duty Breakdown",
+    "line_detail": "Line Item Detail",
+    "col_hts": "HTS Code",
     "col_component": "Tariff Component",
     "col_rate": "Rate",
     "col_amount": "Amount",

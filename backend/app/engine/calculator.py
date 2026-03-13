@@ -72,6 +72,10 @@ class LineItem:
     hts_code: str
     country_of_origin: str   # ISO alpha-2 (e.g. "CN", "TW", "VN")
     entered_value: Decimal   # declared value in USD
+    # Optional OCR-extracted fallback values (used when DB tariff lookup returns None)
+    ocr_tariff_type: str | None = None   # e.g. "IEEPA", "MFN", "S301", "S232"
+    ocr_rate_pct: Decimal | None = None  # e.g. Decimal("0.145") for 14.5%
+    ocr_duty_amount: Decimal | None = None  # pre-extracted duty amount (IEEPA add-on lines)
 
 
 @dataclass
@@ -304,11 +308,26 @@ async def _calc_mfn(
     summary_date: date,
 ) -> DutyComponent:
     """BR-002: mfn_tariff = entered_value × mfn_rate"""
+    # IEEPA add-on lines (9903.01.xx) have no entered_value-based MFN; skip.
+    if item.ocr_duty_amount is not None and item.ocr_tariff_type == TariffType.IEEPA.value:
+        return DutyComponent(
+            tariff_type=TariffType.MFN.value,
+            hts_code=item.hts_code,
+            country_of_origin=item.country_of_origin,
+            entered_value=item.entered_value,
+            rate_pct=Decimal("0"),
+            amount=Decimal("0.00"),
+            applicable=False,
+            rate_not_found=False,
+        )
     rate = await get_tariff_rate(
         db, redis, item.hts_code, item.country_of_origin,
         TariffType.MFN.value, summary_date,
     )
     not_found = rate is None
+    if not_found and item.ocr_tariff_type == TariffType.MFN.value and item.ocr_rate_pct is not None:
+        rate = item.ocr_rate_pct
+        not_found = False
     rate = rate or Decimal("0")
     amount = (item.entered_value * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return DutyComponent(
@@ -350,11 +369,28 @@ async def _calc_ieepa(
             rate_not_found=False,
         )
 
+    # IEEPA add-on line (e.g., 9903.01.24): duty_amount extracted directly from OCR.
+    # These lines have no entered_value on the form; the amount comes from the 7501 directly.
+    if item.ocr_duty_amount is not None and item.ocr_tariff_type == TariffType.IEEPA.value:
+        return DutyComponent(
+            tariff_type=TariffType.IEEPA.value,
+            hts_code=item.hts_code,
+            country_of_origin=item.country_of_origin,
+            entered_value=item.entered_value,
+            rate_pct=item.ocr_rate_pct or Decimal("0"),
+            amount=item.ocr_duty_amount,
+            applicable=True,
+            rate_not_found=False,
+        )
+
     rate = await get_tariff_rate(
         db, redis, item.hts_code, item.country_of_origin,
         TariffType.IEEPA.value, summary_date,
     )
     not_found = rate is None
+    if not_found and item.ocr_tariff_type == TariffType.IEEPA.value and item.ocr_rate_pct is not None:
+        rate = item.ocr_rate_pct
+        not_found = False
     rate = rate or Decimal("0")
     amount = (item.entered_value * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return DutyComponent(
@@ -376,11 +412,26 @@ async def _calc_s301(
     summary_date: date,
 ) -> DutyComponent:
     """BR-003: s301_tariff = entered_value × s301_rate (List 1–4B by HTS code)"""
+    # IEEPA add-on lines are not S301 lines.
+    if item.ocr_duty_amount is not None and item.ocr_tariff_type == TariffType.IEEPA.value:
+        return DutyComponent(
+            tariff_type=TariffType.S301.value,
+            hts_code=item.hts_code,
+            country_of_origin=item.country_of_origin,
+            entered_value=item.entered_value,
+            rate_pct=Decimal("0"),
+            amount=Decimal("0.00"),
+            applicable=False,
+            rate_not_found=False,
+        )
     rate = await get_tariff_rate(
         db, redis, item.hts_code, item.country_of_origin,
         TariffType.S301.value, summary_date,
     )
     not_found = rate is None
+    if not_found and item.ocr_tariff_type == TariffType.S301.value and item.ocr_rate_pct is not None:
+        rate = item.ocr_rate_pct
+        not_found = False
     rate = rate or Decimal("0")
     amount = (item.entered_value * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return DutyComponent(
@@ -409,11 +460,26 @@ async def _calc_s232(
     is not steel/aluminium → applicable = False, amount = $0.00.
     The 'applicable' flag satisfies the section_232_applicable response field.
     """
+    # IEEPA add-on lines are not S232 lines.
+    if item.ocr_duty_amount is not None and item.ocr_tariff_type == TariffType.IEEPA.value:
+        return DutyComponent(
+            tariff_type=TariffType.S232.value,
+            hts_code=item.hts_code,
+            country_of_origin=item.country_of_origin,
+            entered_value=item.entered_value,
+            rate_pct=Decimal("0"),
+            amount=Decimal("0.00"),
+            applicable=False,
+            rate_not_found=False,
+        )
     rate = await get_tariff_rate(
         db, redis, item.hts_code, item.country_of_origin,
         TariffType.S232.value, summary_date,
     )
     applicable = rate is not None
+    if not applicable and item.ocr_tariff_type == TariffType.S232.value and item.ocr_rate_pct is not None:
+        rate = item.ocr_rate_pct
+        applicable = True
     rate = rate or Decimal("0")
     amount = (
         (item.entered_value * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)

@@ -80,6 +80,19 @@ async def get_result(
                 "refundable": tt in _REFUNDABLE,
             })
 
+    # Individual per-HTS-line duty components (excludes entry-level MPF/HMF)
+    line_duty_components = [
+        {
+            "hts_code": c.get("hts_code", ""),
+            "tariff_type": c.get("tariff_type", ""),
+            "rate": round(float(c.get("rate_pct", 0)), 6),
+            "amount": round(float(c.get("amount", 0)), 2),
+            "refundable": c.get("tariff_type") in _REFUNDABLE,
+        }
+        for c in components
+        if c.get("hts_code")  # line-level items carry hts_code; MPF/HMF do not
+    ]
+
     calculated_at = (
         calc.updated_at.isoformat()  # type: ignore[attr-defined]
         if hasattr(calc, "updated_at") and calc.updated_at  # type: ignore[attr-defined]
@@ -109,6 +122,7 @@ async def get_result(
             ),
             "days_elapsed": calc.days_since_summary or 0,
             "tariff_lines": tariff_lines,
+            "line_duty_components": line_duty_components,
             "total_duty": float(calc.total_duty or 0),
             "calculated_at": calculated_at,
         },

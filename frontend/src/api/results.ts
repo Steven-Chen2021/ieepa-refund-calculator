@@ -9,6 +9,14 @@ export interface TariffLine {
   refundable: boolean
 }
 
+export interface DutyLineComponent {
+  hts_code: string
+  tariff_type: 'MFN' | 'IEEPA' | 'S301' | 'S232'
+  rate: number
+  amount: number
+  refundable: boolean
+}
+
 export interface CalculationResult {
   calculation_id: string
   entry_number: string
@@ -24,6 +32,7 @@ export interface CalculationResult {
   refund_pathway: RefundPathway
   days_elapsed: number
   tariff_lines: TariffLine[]
+  line_duty_components?: DutyLineComponent[]
   total_duty: number
   calculated_at: string
 }

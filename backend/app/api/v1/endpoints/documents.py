@@ -450,6 +450,29 @@ def _safe_decimal(val: object, default: Decimal = Decimal("0")) -> Decimal:
         return default
 
 
+def _parse_rate_pct(raw: str) -> Decimal | None:
+    """
+    Parse an OCR-extracted rate string to a decimal fraction.
+    Handles both percentage strings ("7.5%", "14.5 %") and decimal fractions ("0.075", "0.145").
+    Returns None if parsing fails or the value is zero/negative.
+    """
+    if not raw:
+        return None
+    cleaned = raw.strip()
+    try:
+        if "%" in cleaned:
+            pct = Decimal(cleaned.replace("%", "").replace(",", "").strip())
+            rate = (pct / Decimal("100")).quantize(Decimal("0.000001"))
+        else:
+            rate = Decimal(cleaned.replace(",", ""))
+            # Heuristic: values > 1 are likely percentages (e.g. "7.5" means 7.5%)
+            if rate > Decimal("1"):
+                rate = (rate / Decimal("100")).quantize(Decimal("0.000001"))
+        return rate if rate > Decimal("0") else None
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
 def parse_entry_input(doc: "Document") -> "EntryInput":
     """Build EntryInput from a Document's extracted_fields + corrections."""
     fields = merge_doc_fields(doc.extracted_fields, doc.corrections)
@@ -482,19 +505,61 @@ def parse_entry_input(doc: "Document") -> "EntryInput":
         hts = _fval(item, "hts_code")
         ev_raw = _fval(item, "entered_value") or "0"
         country = _fval(item, "country_of_origin") or header_country
+        # OCR uses "tariff_category" and "duty_rate" as field names
+        ocr_category_raw = (_fval(item, "tariff_category") or _fval(item, "category")).upper().strip()
+        ocr_rate_str = _fval(item, "duty_rate") or _fval(item, "rate")
+        ocr_duty_amount_str = _fval(item, "duty_amount") or _fval(item, "amount")
+        is_ieepa_flag = bool(item.get("is_ieepa", False))
 
         # Apply line-item corrections
         corr = li_corrections.get(i, {})
         hts = corr.get("hts_code", hts)
         ev_raw = corr.get("entered_value", ev_raw)
         country = corr.get("country_of_origin", country)
+        if "tariff_category" in corr:
+            ocr_category_raw = corr["tariff_category"].upper().strip()
+        elif "category" in corr:
+            ocr_category_raw = corr["category"].upper().strip()
+        if "duty_rate" in corr:
+            ocr_rate_str = corr["duty_rate"]
+        elif "rate" in corr:
+            ocr_rate_str = corr["rate"]
 
         ev = _safe_decimal(ev_raw)
+        ocr_rate = _parse_rate_pct(ocr_rate_str)
+        _ocr_da = _safe_decimal(ocr_duty_amount_str) if ocr_duty_amount_str else Decimal("0")
+        ocr_duty_amount_val: Decimal | None = _ocr_da if _ocr_da > Decimal("0") else None
+
+        # Map OCR category labels to canonical tariff types
+        _CAT_MAP = {
+            "MAIN": "MFN",    # primary commercial tariff line on CBP 7501
+            "MFN": "MFN",
+            "IEEPA": "IEEPA",
+            "S301": "S301",
+            "S232": "S232",
+        }
+        ocr_tariff_type: str | None = "IEEPA" if is_ieepa_flag else _CAT_MAP.get(ocr_category_raw)
+
         if hts and ev > 0:
+            # Standard commercial line with entered_value
             line_items.append(LineItem(
                 hts_code=hts,
                 country_of_origin=(country.upper() or header_country or ""),
                 entered_value=ev,
+                ocr_tariff_type=ocr_tariff_type,
+                ocr_rate_pct=ocr_rate,
+                ocr_duty_amount=None,  # entered_value × rate used; ocr_duty_amount only for add-ons
+            ))
+        elif hts and ocr_tariff_type == "IEEPA" and ocr_duty_amount_val is not None:
+            # IEEPA add-on line (e.g. HTS 9903.01.24/25): no entered_value on the form,
+            # but duty_amount is printed directly. Use duty_amount as the authoritative amount.
+            line_items.append(LineItem(
+                hts_code=hts,
+                country_of_origin=(country.upper() or header_country or ""),
+                entered_value=Decimal("1"),  # placeholder — not used in calculation
+                ocr_tariff_type="IEEPA",
+                ocr_rate_pct=ocr_rate,
+                ocr_duty_amount=ocr_duty_amount_val,
             ))
 
     # Fallback: one synthetic line item using the total_entered_value
@@ -558,12 +623,23 @@ async def calculate_document(
     )
     existing_calc: Calculation | None = existing.scalar_one_or_none()
     if existing_calc and existing_calc.status == CalculationStatus.completed:
-        return {
-            "success": True,
-            "data": {"calculation_id": str(existing_calc.id)},
-            "error": None,
-            "meta": None,
-        }
+        # Only reuse a completed calculation if it produced meaningful tariff-line amounts.
+        # A non-zero estimated_refund or non-zero tariff duty (beyond MPF/HMF) indicates
+        # the DB had rate data when the calculation ran. If both are $0, the tariff_rates
+        # DB was likely empty — recalculate so OCR-extracted fallback rates are applied.
+        prior_components: list[dict] = existing_calc.duty_components or []
+        line_duty_nonzero = any(
+            float(c.get("amount", 0)) > 0
+            for c in prior_components
+            if c.get("tariff_type") not in ("MPF", "HMF")
+        )
+        if line_duty_nonzero or float(existing_calc.estimated_refund or 0) > 0:
+            return {
+                "success": True,
+                "data": {"calculation_id": str(existing_calc.id)},
+                "error": None,
+                "meta": None,
+            }
 
     # Parse inputs from OCR fields + corrections
     try:
