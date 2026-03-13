@@ -21,15 +21,15 @@ class OcrField:
     """
     Represents one extracted form field with its confidence score.
 
-    ``review_required`` is True when confidence < OCR_CONFIDENCE_THRESHOLD (0.85,
-    per 7501_Parse.md §3 and BR-010). Shown as amber/yellow in the UI.
+    ``review_required`` is True when confidence < OCR_CONFIDENCE_THRESHOLD (0.80,
+    per BR-010). Shown as amber/yellow in the UI.
 
     ``read_failed`` is True when confidence < OCR_FAILED_THRESHOLD (0.50,
     per 7501_Parse.md §3). Shown as red with '讀取失敗' label in the UI.
     """
     value: Any               # str | float | int | None
     confidence: float        # 0.0 – 1.0
-    review_required: bool    # True when confidence < 0.85
+    review_required: bool    # True when confidence < 0.80 (BR-010)
     read_failed: bool = False  # True when confidence < 0.50
 
     def to_dict(self) -> dict:

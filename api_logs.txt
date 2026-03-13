@@ -1,0 +1,242 @@
+api-1  | INFO:     Will watch for changes in these directories: ['/app']
+api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+api-1  | INFO:     Started reloader process [1] using WatchFiles
+api-1  | Process SpawnProcess-1:
+api-1  | Traceback (most recent call last):
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/type_adapter.py", line 210, in __init__
+api-1  |     core_schema = _getattr_no_parents(type, '__pydantic_core_schema__')
+api-1  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/type_adapter.py", line 98, in _getattr_no_parents
+api-1  |     raise AttributeError(attribute)
+api-1  | AttributeError: __pydantic_core_schema__
+api-1  | 
+api-1  | During handling of the above exception, another exception occurred:
+api-1  | 
+api-1  | Traceback (most recent call last):
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 691, in _resolve_forward_ref
+api-1  |     obj = _typing_extra.eval_type_backport(obj, globalns=self._types_namespace)
+api-1  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_typing_extra.py", line 254, in eval_type_backport
+api-1  |     return typing._eval_type(  # type: ignore
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/typing.py", line 395, in _eval_type
+api-1  |     return t._evaluate(globalns, localns, recursive_guard)
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/typing.py", line 905, in _evaluate
+api-1  |     eval(self.__forward_code__, globalns, localns),
+api-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "<string>", line 1, in <module>
+api-1  | NameError: name 'LoginRequest' is not defined
+api-1  | 
+api-1  | The above exception was the direct cause of the following exception:
+api-1  | 
+api-1  | Traceback (most recent call last):
+api-1  |   File "/usr/local/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+api-1  |     self.run()
+api-1  |   File "/usr/local/lib/python3.11/multiprocessing/process.py", line 108, in run
+api-1  |     self._target(*self._args, **self._kwargs)
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/_subprocess.py", line 78, in subprocess_started
+api-1  |     target(sockets=sockets)
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 65, in run
+api-1  |     return asyncio.run(self.serve(sockets=sockets))
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/asyncio/runners.py", line 190, in run
+api-1  |     return runner.run(main)
+api-1  |            ^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/asyncio/runners.py", line 118, in run
+api-1  |     return self._loop.run_until_complete(task)
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 69, in serve
+api-1  |     await self._serve(sockets)
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 76, in _serve
+api-1  |     config.load()
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 433, in load
+api-1  |     self.loaded_app = import_from_string(self.app)
+api-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+api-1  |     module = importlib.import_module(module_str)
+api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+api-1  |   File "/app/app/main.py", line 22, in <module>
+api-1  |     from app.api.v1.router import api_router
+api-1  |   File "/app/app/api/v1/router.py", line 8, in <module>
+api-1  |     from app.api.v1.endpoints.auth import router as auth_router
+api-1  |   File "/app/app/api/v1/endpoints/auth.py", line 69, in <module>
+api-1  |     @router.post(
+api-1  |      ^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 944, in decorator
+api-1  |     self.add_api_route(
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 883, in add_api_route
+api-1  |     route = route_class(
+api-1  |             ^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 513, in __init__
+api-1  |     self.dependant = get_dependant(path=self.path_format, call=self.endpoint)
+api-1  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/dependencies/utils.py", line 261, in get_dependant
+api-1  |     type_annotation, depends, param_field = analyze_param(
+api-1  |                                             ^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/dependencies/utils.py", line 444, in analyze_param
+api-1  |     field = create_response_field(
+api-1  |             ^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/utils.py", line 99, in create_response_field
+api-1  |     return ModelField(**kwargs)  # type: ignore[arg-type]
+api-1  |            ^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "<string>", line 6, in __init__
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/_compat.py", line 109, in __post_init__
+api-1  |     self._type_adapter: TypeAdapter[Any] = TypeAdapter(
+api-1  |                                            ^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/type_adapter.py", line 212, in __init__
+api-1  |     core_schema = _get_schema(type, config_wrapper, parent_depth=_parent_depth + 1)
+api-1  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/type_adapter.py", line 81, in _get_schema
+api-1  |     schema = gen.generate_schema(type_)
+api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 502, in generate_schema
+api-1  |     schema = self._generate_schema_inner(obj)
+api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 737, in _generate_schema_inner
+api-1  |     return self._annotated_schema(obj)
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 1753, in _annotated_schema
+api-1  |     source_type, *annotations = self._get_args_resolving_forward_refs(
+api-1  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 715, in _get_args_resolving_forward_refs
+api-1  |     args = tuple([self._resolve_forward_ref(a) if isinstance(a, ForwardRef) else a for a in args])
+api-1  |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 715, in <listcomp>
+api-1  |     args = tuple([self._resolve_forward_ref(a) if isinstance(a, ForwardRef) else a for a in args])
+api-1  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 693, in _resolve_forward_ref
+api-1  |     raise PydanticUndefinedAnnotation.from_name_error(e) from e
+api-1  | pydantic.errors.PydanticUndefinedAnnotation: name 'LoginRequest' is not defined
+api-1  | 
+api-1  | For further information visit https://errors.pydantic.dev/2.7/u/undefined-annotation
+api-1  | WARNING:  WatchFiles detected changes in 'alembic/versions/0001_initial_schema.py'. Reloading...
+api-1  | Process SpawnProcess-2:
+api-1  | Traceback (most recent call last):
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/type_adapter.py", line 210, in __init__
+api-1  |     core_schema = _getattr_no_parents(type, '__pydantic_core_schema__')
+api-1  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/type_adapter.py", line 98, in _getattr_no_parents
+api-1  |     raise AttributeError(attribute)
+api-1  | AttributeError: __pydantic_core_schema__
+api-1  | 
+api-1  | During handling of the above exception, another exception occurred:
+api-1  | 
+api-1  | Traceback (most recent call last):
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 691, in _resolve_forward_ref
+api-1  |     obj = _typing_extra.eval_type_backport(obj, globalns=self._types_namespace)
+api-1  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_typing_extra.py", line 254, in eval_type_backport
+api-1  |     return typing._eval_type(  # type: ignore
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/typing.py", line 395, in _eval_type
+api-1  |     return t._evaluate(globalns, localns, recursive_guard)
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/typing.py", line 905, in _evaluate
+api-1  |     eval(self.__forward_code__, globalns, localns),
+api-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "<string>", line 1, in <module>
+api-1  | NameError: name 'LoginRequest' is not defined
+api-1  | 
+api-1  | The above exception was the direct cause of the following exception:
+api-1  | 
+api-1  | Traceback (most recent call last):
+api-1  |   File "/usr/local/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+api-1  |     self.run()
+api-1  |   File "/usr/local/lib/python3.11/multiprocessing/process.py", line 108, in run
+api-1  |     self._target(*self._args, **self._kwargs)
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/_subprocess.py", line 78, in subprocess_started
+api-1  |     target(sockets=sockets)
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 65, in run
+api-1  |     return asyncio.run(self.serve(sockets=sockets))
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/asyncio/runners.py", line 190, in run
+api-1  |     return runner.run(main)
+api-1  |            ^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/asyncio/runners.py", line 118, in run
+api-1  |     return self._loop.run_until_complete(task)
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 69, in serve
+api-1  |     await self._serve(sockets)
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 76, in _serve
+api-1  |     config.load()
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 433, in load
+api-1  |     self.loaded_app = import_from_string(self.app)
+api-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+api-1  |     module = importlib.import_module(module_str)
+api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+api-1  |   File "/app/app/main.py", line 22, in <module>
+api-1  |     from app.api.v1.router import api_router
+api-1  |   File "/app/app/api/v1/router.py", line 8, in <module>
+api-1  |     from app.api.v1.endpoints.auth import router as auth_router
+api-1  |   File "/app/app/api/v1/endpoints/auth.py", line 69, in <module>
+api-1  |     @router.post(
+api-1  |      ^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 944, in decorator
+api-1  |     self.add_api_route(
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 883, in add_api_route
+api-1  |     route = route_class(
+api-1  |             ^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 513, in __init__
+api-1  |     self.dependant = get_dependant(path=self.path_format, call=self.endpoint)
+api-1  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/dependencies/utils.py", line 261, in get_dependant
+api-1  |     type_annotation, depends, param_field = analyze_param(
+api-1  |                                             ^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/dependencies/utils.py", line 444, in analyze_param
+api-1  |     field = create_response_field(
+api-1  |             ^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/utils.py", line 99, in create_response_field
+api-1  |     return ModelField(**kwargs)  # type: ignore[arg-type]
+api-1  |            ^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "<string>", line 6, in __init__
+api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/_compat.py", line 109, in __post_init__
+api-1  |     self._type_adapter: TypeAdapter[Any] = TypeAdapter(
+api-1  |                                            ^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/type_adapter.py", line 212, in __init__
+api-1  |     core_schema = _get_schema(type, config_wrapper, parent_depth=_parent_depth + 1)
+api-1  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/type_adapter.py", line 81, in _get_schema
+api-1  |     schema = gen.generate_schema(type_)
+api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 502, in generate_schema
+api-1  |     schema = self._generate_schema_inner(obj)
+api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 737, in _generate_schema_inner
+api-1  |     return self._annotated_schema(obj)
+api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 1753, in _annotated_schema
+api-1  |     source_type, *annotations = self._get_args_resolving_forward_refs(
+api-1  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 715, in _get_args_resolving_forward_refs
+api-1  |     args = tuple([self._resolve_forward_ref(a) if isinstance(a, ForwardRef) else a for a in args])
+api-1  |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 715, in <listcomp>
+api-1  |     args = tuple([self._resolve_forward_ref(a) if isinstance(a, ForwardRef) else a for a in args])
+api-1  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+api-1  |   File "/usr/local/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py", line 693, in _resolve_forward_ref
+api-1  |     raise PydanticUndefinedAnnotation.from_name_error(e) from e
+api-1  | pydantic.errors.PydanticUndefinedAnnotation: name 'LoginRequest' is not defined
+api-1  | 
+api-1  | For further information visit https://errors.pydantic.dev/2.7/u/undefined-annotation

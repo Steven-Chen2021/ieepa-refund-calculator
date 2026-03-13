@@ -43,7 +43,7 @@ from app.ocr.models import IEEPA_HTS_CODES, OcrField, OcrResult
 logger = logging.getLogger(__name__)
 
 # ── Confidence thresholds (7501_Parse.md §3 / BR-010) ────────────────────────
-_REVIEW_THRESHOLD: float = settings.OCR_CONFIDENCE_THRESHOLD  # 0.85 → amber
+_REVIEW_THRESHOLD: float = settings.OCR_CONFIDENCE_THRESHOLD  # 0.80 → amber (BR-010)
 _FAILED_THRESHOLD: float = settings.OCR_FAILED_THRESHOLD      # 0.50 → red
 
 # ── IEEPA / S301 supplemental tariff prefix detection ────────────────────────

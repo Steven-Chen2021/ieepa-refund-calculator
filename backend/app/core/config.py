@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     TESSERACT_CMD: str = "/usr/bin/tesseract"
     OCR_FALLBACK_ENABLED: bool = True
     # BR-010 / 7501_Parse.md: fields below this threshold are flagged review_required
-    OCR_CONFIDENCE_THRESHOLD: float = 0.85
+    OCR_CONFIDENCE_THRESHOLD: float = 0.80
     # 7501_Parse.md §3: fields below this threshold are marked read_failed (red)
     OCR_FAILED_THRESHOLD: float = 0.50
 

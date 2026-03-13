@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/app/app/main.py", line 22, in <module>
+    from app.api.v1.router import api_router
+  File "/app/app/api/v1/router.py", line 9, in <module>
+    from app.api.v1.endpoints.documents import router as documents_router
+  File "/app/app/api/v1/endpoints/documents.py", line 23, in <module>
+    import magic  # python-magic ??SEC-007
+    ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/magic/__init__.py", line 209, in <module>
+    libmagic = loader.load_lib()
+               ^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/magic/loader.py", line 49, in load_lib
+    raise ImportError('failed to find libmagic.  Check your installation')
+ImportError: failed to find libmagic.  Check your installation

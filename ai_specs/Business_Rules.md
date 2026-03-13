@@ -18,7 +18,7 @@
 |------|------|
 | **規則 ID** | BR-001 |
 | **規則名稱** | IEEPA 關稅適用性判斷 |
-| **條件** | `country_of_origin = 'CN'` 且 `summary_date` 在 IEEPA 生效日期區間內 |
+| **條件** | HTS Code 開頭為 9903.01 或 9903.02 且稅額 > 0 的行項目且 `summary_date` 在 IEEPA 生效日期區間內 |
 | **動作** | 計算 IEEPA 關稅：`entered_value × ieepa_rate` |
 | **例外** | 非中國原產地（non-CN）一律回傳 IEEPA 關稅 = $0.00 |
 | **參考來源** | CALC-002 |
