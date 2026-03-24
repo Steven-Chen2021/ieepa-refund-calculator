@@ -40,9 +40,11 @@ function TariffTypeBadge({ category }: { category: string }): JSX.Element {
 function FieldCell({
   field,
   onEdit,
+  showConfidence = true,
 }: {
   field: OcrField | undefined
   onEdit: (val: string) => void
+  showConfidence?: boolean
 }): JSX.Element {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
@@ -51,7 +53,7 @@ function FieldCell({
 
   if (!field) return <span className="text-gray-400">—</span>
 
-  const colour = fieldColour(field, edited)
+  const colour = showConfidence ? fieldColour(field, edited) : 'normal'
   const pct = Math.round((field.confidence ?? 0) * 100)
 
   if (editing) {
@@ -87,14 +89,16 @@ function FieldCell({
           ? 'text-logo-blue'
           : 'text-brand-gray'
 
-  const hintText =
+  const hintText: string | null =
     edited
       ? `✏ ${t('review.edited')}`
-      : colour === 'red'
-        ? `✗ ${t('review.read_failed')}`
-        : colour === 'amber'
-          ? `⚠ ${t('review.confidence', { pct })}`
-          : `✓ ${t('review.confidence', { pct })}`
+      : showConfidence
+        ? colour === 'red'
+          ? `✗ ${t('review.read_failed')}`
+          : colour === 'amber'
+            ? `⚠ ${t('review.confidence', { pct })}`
+            : `✓ ${t('review.confidence', { pct })}`
+        : null
 
   return (
     <div
@@ -106,7 +110,7 @@ function FieldCell({
       aria-label={`Edit field, current value: ${draft}`}
     >
       <p className="text-sm font-medium">{draft || '—'}</p>
-      <p className={`text-xs mt-0.5 ${hintCls}`}>{hintText}</p>
+      {hintText && <p className={`text-xs mt-0.5 ${hintCls}`}>{hintText}</p>}
     </div>
   )
 }
@@ -121,6 +125,7 @@ export default function ReviewPage(): JSX.Element {
 
   const [fields, setFields] = useState<ExtractedFields | null>(null)
   const [corrections, setCorrections] = useState<Record<string, string>>({})
+  const [extractionMethod, setExtractionMethod] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -128,7 +133,11 @@ export default function ReviewPage(): JSX.Element {
   useEffect(() => {
     if (!jobId) { navigate('/calculate'); return }
     getJobStatus(jobId)
-      .then((res) => { setFields(res.extracted_fields ?? null); setLoading(false) })
+      .then((res) => {
+        setFields(res.extracted_fields ?? null)
+        setExtractionMethod(res.extraction_method ?? null)
+        setLoading(false)
+      })
       .catch(() => { setError('Failed to load document data.'); setLoading(false) })
   }, [jobId, navigate])
 
@@ -146,6 +155,8 @@ export default function ReviewPage(): JSX.Element {
           0,
         ) ?? 0)
       : 0
+
+  const isDirectRead = extractionMethod === 'direct_text'
 
   const handleConfirm = async (): Promise<void> => {
     setSubmitting(true)
@@ -201,10 +212,12 @@ export default function ReviewPage(): JSX.Element {
       <StepIndicator current={2} />
 
       <h1 className="text-2xl font-heading font-semibold text-navy-blue mb-1">{t('review.title')}</h1>
-      <p className="text-dark-gray text-sm mb-6">{t('review.subtitle')}</p>
+      <p className="text-dark-gray text-sm mb-6">
+        {t(isDirectRead ? 'review.subtitle_direct' : 'review.subtitle')}
+      </p>
 
-      {/* Amber warning banner */}
-      {amberCount > 0 && (
+      {/* Amber warning banner — only shown when OCR confidence indicators are relevant */}
+      {!isDirectRead && amberCount > 0 && (
         <div className="mb-6 flex items-center gap-3 bg-orange-50 border border-logo-orange text-logo-orange-dark rounded-none rounded-br-lg p-4 text-sm font-medium">
           <span className="text-lg">⚠️</span>
           {t('review.amber_warning_other', { count: amberCount })}
@@ -231,6 +244,7 @@ export default function ReviewPage(): JSX.Element {
               <FieldCell
                 field={fields?.[fieldKey] as OcrField | undefined}
                 onEdit={(v) => setField(fieldKey, v)}
+                showConfidence={!isDirectRead}
               />
             </div>
           ))}
@@ -280,6 +294,7 @@ export default function ReviewPage(): JSX.Element {
                           <FieldCell
                             field={li.hts_code}
                             onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].hts_code`, v)}
+                            showConfidence={!isDirectRead}
                           />
                         </td>
                         <td className="px-4 py-2">
@@ -290,6 +305,7 @@ export default function ReviewPage(): JSX.Element {
                             <FieldCell
                               field={li.duty_rate}
                               onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].duty_rate`, v)}
+                              showConfidence={!isDirectRead}
                             />
                           ) : <span className="text-brand-gray">—</span>}
                         </td>
@@ -298,6 +314,7 @@ export default function ReviewPage(): JSX.Element {
                             <FieldCell
                               field={li.duty_amount}
                               onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].duty_amount`, v)}
+                              showConfidence={!isDirectRead}
                             />
                           ) : <span className="text-brand-gray">—</span>}
                         </td>

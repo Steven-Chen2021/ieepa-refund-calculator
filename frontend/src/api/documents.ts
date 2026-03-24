@@ -57,6 +57,8 @@ export interface JobStatusResponse {
   status: 'queued' | 'processing' | 'completed' | 'review_required' | 'failed'
   ocr_provider?: string
   ocr_confidence?: number
+  /** "direct_text" when pdfplumber read a digital PDF without image OCR; "ocr" otherwise */
+  extraction_method?: 'direct_text' | 'ocr'
   extracted_fields?: ExtractedFields
   error?: string
 }
