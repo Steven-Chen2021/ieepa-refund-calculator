@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router-dom'
+import DimercoLogo from './DimercoLogo'
 
 export default function Navbar(): JSX.Element {
   const { t, i18n } = useTranslation()
@@ -12,10 +13,9 @@ export default function Navbar(): JSX.Element {
   return (
     <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-white border-b border-gray-200 shadow-sm font-body">
       <div className="max-w-6xl mx-auto h-full px-4 flex items-center justify-between">
-        {/* Logo + title */}
-        <Link to="/" className="flex items-center gap-2 text-navy-blue font-heading font-bold text-lg">
-          <span className="text-2xl">🔍</span>
-          <span className="hidden sm:inline">{t('nav.title')}</span>
+        {/* Dimerco Logo */}
+        <Link to="/" className="flex items-center">
+          <DimercoLogo className="h-7 w-auto" />
         </Link>
 
         {/* Right actions */}

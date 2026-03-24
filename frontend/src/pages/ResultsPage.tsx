@@ -14,7 +14,6 @@ function pct(n: number): string {
   return `${(n * 100).toFixed(4)}%`
 }
 
-const PATHWAY_ICON: Record<string, string> = { PSC: '✅', PROTEST: '⚠️', INELIGIBLE: '❌' }
 
 export default function ResultsPage(): JSX.Element {
   const { t } = useTranslation()
@@ -106,7 +105,6 @@ export default function ResultsPage(): JSX.Element {
 
       {/* ── Refund callout ─────────────────────────────────── */}
       <div className="bg-gray-white border border-success rounded-none rounded-br-lg p-8 mb-6 text-center shadow-sm">
-        <div className="text-3xl mb-2">💰</div>
         <p className="text-sm font-heading font-semibold text-success uppercase tracking-wide mb-1">
           {t('results.title')}
         </p>
@@ -119,7 +117,6 @@ export default function ResultsPage(): JSX.Element {
             <PathwayBadge pathway={result.refund_pathway} large />
           </div>
           <p className="text-sm text-dark-gray max-w-sm">
-            {PATHWAY_ICON[result.refund_pathway]}{' '}
             {t(pathwayNameKey as never)}
           </p>
         </div>
@@ -324,12 +321,6 @@ export default function ResultsPage(): JSX.Element {
 
       {/* ── Action buttons ──────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <button
-          onClick={() => window.alert('PDF export requires a logged-in session.')}
-          className="flex items-center gap-2 px-5 py-3 bg-gradient-to-b from-logo-orange to-logo-orange-dark text-white rounded-none rounded-br-lg font-heading font-semibold hover:opacity-90 text-sm shadow-sm"
-        >
-          📄 {t('results.btn_download')}
-        </button>
         <Link
           to="/calculate"
           className="flex items-center gap-2 px-5 py-3 border border-logo-orange text-logo-orange bg-transparent rounded-none font-heading font-semibold hover:bg-orange-50 text-sm"
