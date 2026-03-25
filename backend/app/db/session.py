@@ -23,8 +23,7 @@ engine = create_async_engine(
     echo=settings.DEBUG,
     pool_pre_ping=True,
     # asyncpg pool sizing
-    pool_size=10,
-    max_overflow=20,
+    connect_args={"check_same_thread": False}
 )
 
 AsyncSessionLocal = async_sessionmaker(

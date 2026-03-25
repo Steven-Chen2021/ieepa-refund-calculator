@@ -27,56 +27,59 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    is_postgres = bind.dialect.name == "postgresql"
 
     # ── ENUM types ───────────────────────────────────────────────────────────
 
-    user_role_enum = postgresql.ENUM(
-        "user", "admin", name="user_role_enum", create_type=False
-    )
-    user_role_enum.create(op.get_bind(), checkfirst=True)
+    if is_postgres:
+        user_role_enum = postgresql.ENUM(
+            "user", "admin", name="user_role_enum", create_type=False
+        )
+        user_role_enum.create(bind, checkfirst=True)
 
-    document_status_enum = postgresql.ENUM(
-        "queued", "processing", "completed", "review_required", "failed",
-        name="document_status_enum", create_type=False,
-    )
-    document_status_enum.create(op.get_bind(), checkfirst=True)
+        document_status_enum = postgresql.ENUM(
+            "queued", "processing", "completed", "review_required", "failed",
+            name="document_status_enum", create_type=False,
+        )
+        document_status_enum.create(bind, checkfirst=True)
 
-    calculation_status_enum = postgresql.ENUM(
-        "pending", "calculating", "completed", "failed",
-        name="calculation_status_enum", create_type=False,
-    )
-    calculation_status_enum.create(op.get_bind(), checkfirst=True)
+        calculation_status_enum = postgresql.ENUM(
+            "pending", "calculating", "completed", "failed",
+            name="calculation_status_enum", create_type=False,
+        )
+        calculation_status_enum.create(bind, checkfirst=True)
 
-    refund_pathway_enum = postgresql.ENUM(
-        "PSC", "PROTEST", "INELIGIBLE",
-        name="refund_pathway_enum", create_type=False,
-    )
-    refund_pathway_enum.create(op.get_bind(), checkfirst=True)
+        refund_pathway_enum = postgresql.ENUM(
+            "PSC", "PROTEST", "INELIGIBLE",
+            name="refund_pathway_enum", create_type=False,
+        )
+        refund_pathway_enum.create(bind, checkfirst=True)
 
-    tariff_type_enum = postgresql.ENUM(
-        "MFN", "IEEPA", "S301", "S232",
-        name="tariff_type_enum", create_type=False,
-    )
-    tariff_type_enum.create(op.get_bind(), checkfirst=True)
+        tariff_type_enum = postgresql.ENUM(
+            "MFN", "IEEPA", "S301", "S232",
+            name="tariff_type_enum", create_type=False,
+        )
+        tariff_type_enum.create(bind, checkfirst=True)
 
-    crm_sync_status_enum = postgresql.ENUM(
-        "pending", "synced", "failed",
-        name="crm_sync_status_enum", create_type=False,
-    )
-    crm_sync_status_enum.create(op.get_bind(), checkfirst=True)
+        crm_sync_status_enum = postgresql.ENUM(
+            "pending", "synced", "failed",
+            name="crm_sync_status_enum", create_type=False,
+        )
+        crm_sync_status_enum.create(bind, checkfirst=True)
 
     # ── users ────────────────────────────────────────────────────────────────
 
     op.create_table(
         "users",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True, nullable=False),
         sa.Column("email", sa.String(254), nullable=False),
         sa.Column("hashed_password", sa.String(128), nullable=False),
         sa.Column("full_name", sa.String(200), nullable=True),
         sa.Column("company_name", sa.String(200), nullable=True),
         sa.Column(
             "role",
-            postgresql.ENUM("user", "admin", name="user_role_enum", create_type=False),
+            sa.Enum("user", "admin", name="user_role_enum", native_enum=is_postgres),
             nullable=False,
             server_default="user",
         ),
@@ -87,13 +90,13 @@ def upgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
     )
@@ -104,8 +107,8 @@ def upgrade() -> None:
 
     op.create_table(
         "documents",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("user_id", sa.Uuid(as_uuid=True), nullable=True),
         sa.Column("session_id", sa.String(128), nullable=True),
         sa.Column("idempotency_key", sa.String(128), nullable=True),
         sa.Column("original_filename", sa.String(255), nullable=False),
@@ -115,29 +118,29 @@ def upgrade() -> None:
         sa.Column("privacy_accepted", sa.Boolean, nullable=False, server_default="false"),
         sa.Column(
             "status",
-            postgresql.ENUM(
+            sa.Enum(
                 "queued", "processing", "completed", "review_required", "failed",
                 name="document_status_enum",
-                create_type=False,
+                native_enum=is_postgres,
             ),
             nullable=False,
             server_default="queued",
         ),
         sa.Column("ocr_provider", sa.String(50), nullable=True),
         sa.Column("ocr_confidence", sa.Float, nullable=True),
-        sa.Column("extracted_fields", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("corrections", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("extracted_fields", sa.JSON(), nullable=True),
+        sa.Column("corrections", sa.JSON(), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
     )
@@ -150,12 +153,12 @@ def upgrade() -> None:
 
     op.create_table(
         "calculations",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column("document_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("document_id", sa.Uuid(as_uuid=True), sa.ForeignKey("documents.id", ondelete="RESTRICT"), nullable=False),
         sa.Column(
             "status",
-            postgresql.ENUM("pending", "calculating", "completed", "failed",
-                    name="calculation_status_enum", create_type=False),
+            sa.Enum("pending", "calculating", "completed", "failed",
+                    name="calculation_status_enum", native_enum=is_postgres),
             nullable=False,
             server_default="pending",
         ),
@@ -167,12 +170,12 @@ def upgrade() -> None:
         sa.Column("importer_name", sa.String(200), nullable=True),
         sa.Column("mode_of_transport", sa.String(20), nullable=True),
         sa.Column("total_entered_value", sa.Numeric(14, 2), nullable=True),
-        sa.Column("duty_components", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("duty_components", sa.JSON(), nullable=True),
         sa.Column("total_duty", sa.Numeric(14, 2), nullable=True),
         sa.Column("estimated_refund", sa.Numeric(14, 2), nullable=True),
         sa.Column(
             "refund_pathway",
-            postgresql.ENUM("PSC", "PROTEST", "INELIGIBLE", name="refund_pathway_enum", create_type=False),
+            sa.Enum("PSC", "PROTEST", "INELIGIBLE", name="refund_pathway_enum", native_enum=is_postgres),
             nullable=True,
         ),
         sa.Column("days_since_summary", sa.Integer, nullable=True),
@@ -181,13 +184,13 @@ def upgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
     )
@@ -196,58 +199,47 @@ def upgrade() -> None:
     op.create_index(
         "ix_calculations_idempotency_key", "calculations", ["idempotency_key"], unique=True
     )
-    op.create_foreign_key(
-        "fk_calculations_document_id",
-        "calculations", "documents",
-        ["document_id"], ["id"],
-        ondelete="RESTRICT",
-    )
 
     # ── calculation_audit (append-only) ──────────────────────────────────────
 
     op.create_table(
         "calculation_audit",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column("calculation_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("snapshot", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("calculation_id", sa.Uuid(as_uuid=True), sa.ForeignKey("calculations.id", ondelete="RESTRICT"), nullable=False),
+        sa.Column("snapshot", sa.JSON(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
     )
     op.create_index(
         "ix_calculation_audit_calculation_id", "calculation_audit", ["calculation_id"]
     )
-    op.create_foreign_key(
-        "fk_calculation_audit_calculation_id",
-        "calculation_audit", "calculations",
-        ["calculation_id"], ["id"],
-        ondelete="RESTRICT",
-    )
 
-    # Protect append-only constraint: block UPDATE and DELETE via trigger
-    op.execute("""
-        CREATE OR REPLACE FUNCTION prevent_calculation_audit_mutation()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            RAISE EXCEPTION 'calculation_audit is append-only: UPDATE and DELETE are not permitted';
-        END;
-        $$ LANGUAGE plpgsql;
-    """)
-    op.execute("""
-        CREATE TRIGGER trg_calculation_audit_no_update
-        BEFORE UPDATE OR DELETE ON calculation_audit
-        FOR EACH ROW EXECUTE FUNCTION prevent_calculation_audit_mutation();
-    """)
+    # Protect append-only constraint: block UPDATE and DELETE via trigger (Postgres only)
+    if is_postgres:
+        op.execute("""
+            CREATE OR REPLACE FUNCTION prevent_calculation_audit_mutation()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                RAISE EXCEPTION 'calculation_audit is append-only: UPDATE and DELETE are not permitted';
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
+        op.execute("""
+            CREATE TRIGGER trg_calculation_audit_no_update
+            BEFORE UPDATE OR DELETE ON calculation_audit
+            FOR EACH ROW EXECUTE FUNCTION prevent_calculation_audit_mutation();
+        """)
 
     # ── leads ────────────────────────────────────────────────────────────────
 
     op.create_table(
         "leads",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column("calculation_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("calculation_id", sa.Uuid(as_uuid=True), sa.ForeignKey("calculations.id", ondelete="RESTRICT"), nullable=False),
         # PII stored as Fernet ciphertext (TEXT column)
         sa.Column("full_name", sa.String, nullable=False),
         sa.Column("email", sa.String, nullable=False),
@@ -262,7 +254,7 @@ def upgrade() -> None:
         # CRM sync
         sa.Column(
             "crm_sync_status",
-            postgresql.ENUM("pending", "synced", "failed", name="crm_sync_status_enum", create_type=False),
+            sa.Enum("pending", "synced", "failed", name="crm_sync_status_enum", native_enum=is_postgres),
             nullable=False,
             server_default="pending",
         ),
@@ -272,81 +264,74 @@ def upgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
+        sa.UniqueConstraint("calculation_id", name="uq_leads_calculation_id"),
     )
     op.create_index("ix_leads_calculation_id", "leads", ["calculation_id"])
     op.create_index("ix_leads_crm_sync_status", "leads", ["crm_sync_status"])
-    op.create_unique_constraint("uq_leads_calculation_id", "leads", ["calculation_id"])
-    op.create_foreign_key(
-        "fk_leads_calculation_id",
-        "leads", "calculations",
-        ["calculation_id"], ["id"],
-        ondelete="RESTRICT",
-    )
 
     # ── tariff_rates ─────────────────────────────────────────────────────────
 
     op.create_table(
         "tariff_rates",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True, nullable=False),
         sa.Column("hts_code", sa.String(15), nullable=False),
         sa.Column("country_code", sa.String(3), nullable=False),
         sa.Column(
             "tariff_type",
-            postgresql.ENUM("MFN", "IEEPA", "S301", "S232", name="tariff_type_enum", create_type=False),
+            sa.Enum("MFN", "IEEPA", "S301", "S232", name="tariff_type_enum", native_enum=is_postgres),
             nullable=False,
         ),
         sa.Column("rate_pct", sa.Numeric(8, 4), nullable=False),
         sa.Column("effective_from", sa.Date, nullable=False),
         sa.Column("effective_to", sa.Date, nullable=True),
         sa.Column("source_ref", sa.String(100), nullable=True),
-        sa.Column("updated_by", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("updated_by", sa.Uuid(as_uuid=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
+        ),
+        sa.UniqueConstraint(
+            "hts_code", "country_code", "tariff_type", "effective_from",
+            name="uq_tariff_rate_lookup",
         ),
     )
     op.create_index("ix_tariff_rates_hts_code", "tariff_rates", ["hts_code"])
     op.create_index("ix_tariff_rates_country_code", "tariff_rates", ["country_code"])
     op.create_index("ix_tariff_rates_tariff_type", "tariff_rates", ["tariff_type"])
-    op.create_unique_constraint(
-        "uq_tariff_rate_lookup",
-        "tariff_rates",
-        ["hts_code", "country_code", "tariff_type", "effective_from"],
-    )
 
     # ── audit_log ────────────────────────────────────────────────────────────
 
     op.create_table(
         "audit_log",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column("admin_user_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True, nullable=False),
+        sa.Column("admin_user_id", sa.Uuid(as_uuid=True), nullable=True),
         sa.Column("action", sa.String(100), nullable=False),
         sa.Column("resource_type", sa.String(50), nullable=True),
         sa.Column("resource_id", sa.String(100), nullable=True),
-        sa.Column("old_value", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("new_value", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("old_value", sa.JSON(), nullable=True),
+        sa.Column("new_value", sa.JSON(), nullable=True),
         sa.Column("ip_address", sa.String(45), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=False,
         ),
     )
@@ -355,25 +340,31 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    is_postgres = bind.dialect.name == "postgresql"
+
     # Drop tables in reverse dependency order
     op.drop_table("audit_log")
     op.drop_table("tariff_rates")
     op.drop_table("leads")
 
-    op.execute("DROP TRIGGER IF EXISTS trg_calculation_audit_no_update ON calculation_audit")
-    op.execute("DROP FUNCTION IF EXISTS prevent_calculation_audit_mutation()")
+    if is_postgres:
+        op.execute("DROP TRIGGER IF EXISTS trg_calculation_audit_no_update ON calculation_audit")
+        op.execute("DROP FUNCTION IF EXISTS prevent_calculation_audit_mutation()")
+
     op.drop_table("calculation_audit")
     op.drop_table("calculations")
     op.drop_table("documents")
     op.drop_table("users")
 
-    # Drop ENUMs
-    for enum_name in (
-        "crm_sync_status_enum",
-        "tariff_type_enum",
-        "refund_pathway_enum",
-        "calculation_status_enum",
-        "document_status_enum",
-        "user_role_enum",
-    ):
-        op.execute(f"DROP TYPE IF EXISTS {enum_name}")
+    # Drop ENUMs (Postgres only)
+    if is_postgres:
+        for enum_name in (
+            "crm_sync_status_enum",
+            "tariff_type_enum",
+            "refund_pathway_enum",
+            "calculation_status_enum",
+            "document_status_enum",
+            "user_role_enum",
+        ):
+            op.execute(f"DROP TYPE IF EXISTS {enum_name}")

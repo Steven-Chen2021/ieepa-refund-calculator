@@ -40,24 +40,26 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "ieepa_refund_db"
     POSTGRES_USER: str = "ieepa_app"
     POSTGRES_PASSWORD: str = "dev_password_only"
-    DATABASE_URL: str = ""
+    DATABASE_URL: str = "sqlite+aiosqlite:///./ieepa.db"
 
     @model_validator(mode="after")
     def assemble_db_url(self) -> "Settings":
-        if not self.DATABASE_URL:
-            self.DATABASE_URL = (
-                f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-                f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-            )
+        # Keep SQLite as default if not explicitly overridden by a postgres URL
+        if not self.DATABASE_URL or self.DATABASE_URL.startswith("postgresql"):
+             if self.POSTGRES_HOST != "db": # If user changed host, they probably want Postgres
+                self.DATABASE_URL = (
+                    f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                    f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+                )
         return self
 
     # ── Redis ────────────────────────────────────────────────
-    REDIS_HOST: str = "redis"
+    REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str = ""
-    REDIS_URL: str = ""
-    CELERY_BROKER_URL: str = ""
-    CELERY_RESULT_BACKEND: str = ""
+    REDIS_URL: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     CACHE_TTL_SECONDS: int = 3600
 
     @model_validator(mode="after")

@@ -16,8 +16,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, Numeric, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, DateTime, Enum, Integer, Numeric, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -53,7 +52,7 @@ class Lead(TimestampMixin, Base):
     id: Mapped[uuid.UUID] = uuid_pk()
 
     calculation_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
+        Uuid(as_uuid=True), nullable=False, index=True
     )
 
     # ── PII — stored encrypted (Fernet AES-256-GCM) ──────────

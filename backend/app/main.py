@@ -12,11 +12,13 @@ Creates and configures the FastAPI application with:
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 
 from app.api.v1.router import api_router
@@ -81,9 +83,9 @@ def create_app() -> FastAPI:
     # 2. CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
+        allow_origins=["*"], # Simplified for trial
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["*"],
         allow_headers=["*"],
     )
 
@@ -98,6 +100,28 @@ def create_app() -> FastAPI:
     @app.get("/health", include_in_schema=False)
     async def health() -> dict:
         return {"status": "ok"}
+
+    # ── Static Files & SPA ───────────────────────────────────────────────
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    if os.path.exists(static_dir):
+        # Assets mount (CSS/JS)
+        assets_dir = os.path.join(static_dir, "assets")
+        if os.path.exists(assets_dir):
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_spa(full_path: str):
+            # If path starts with api/v1, it should have been caught by router
+            if full_path.startswith("api/v1") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
+                return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+            # Serve individual files if they exist (e.g. logo, manifest)
+            file_path = os.path.join(static_dir, full_path)
+            if os.path.isfile(file_path):
+                return FileResponse(file_path)
+
+            # Fallback to index.html for SPA routing
+            return FileResponse(os.path.join(static_dir, "index.html"))
 
     return app
 
