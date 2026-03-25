@@ -34,6 +34,34 @@ _stub("pytesseract")
 _stub("pdfplumber")
 _stub("weasyprint")
 
+# ── Celery (unit tests don't need the real worker runtime) ───────────────────
+celery_stub = _stub("celery")
+
+
+class _DummyTask:
+    class MaxRetriesExceededError(Exception):
+        pass
+
+    def retry(self, exc=None):
+        raise self.MaxRetriesExceededError() from exc
+
+
+class _DummyCelery:
+    def __init__(self, *args, **kwargs):
+        self.conf = MagicMock()
+
+    def task(self, *args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def send_task(self, *args, **kwargs):
+        return None
+
+
+celery_stub.Task = _DummyTask
+celery_stub.Celery = _DummyCelery
+
 # ── cryptography (Fernet) — provide a minimal shim ───────────────────────────
 try:
     import cryptography  # noqa: F401 — use real lib if available

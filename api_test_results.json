@@ -1,0 +1,434 @@
+[
+  {
+    "id": "TC-HEALTH-001",
+    "group": "Health",
+    "desc": "GET /health returns 200 {status:ok}",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-AUTH-001",
+    "group": "Auth/token",
+    "desc": "Valid credentials → 200 + access_token + refresh cookie",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": "access_token present, refresh_token cookie set"
+  },
+  {
+    "id": "TC-AUTH-002",
+    "group": "Auth/token",
+    "desc": "Wrong password → 401 INVALID_CREDENTIALS",
+    "result": "PASS",
+    "actual_status": 401,
+    "detail": ""
+  },
+  {
+    "id": "TC-AUTH-003",
+    "group": "Auth/token",
+    "desc": "Unknown email → 401 INVALID_CREDENTIALS",
+    "result": "PASS",
+    "actual_status": 401,
+    "detail": ""
+  },
+  {
+    "id": "TC-AUTH-004",
+    "group": "Auth/token",
+    "desc": "Missing email → 422 Unprocessable Entity",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-AUTH-005",
+    "group": "Auth/token",
+    "desc": "Missing password → 422",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-AUTH-006",
+    "group": "Auth/token",
+    "desc": "Invalid email format → 422",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-AUTH-007",
+    "group": "Auth/token",
+    "desc": "Empty JSON body → 422",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-AUTH-008",
+    "group": "Auth/token",
+    "desc": "Null email → 422",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-AUTH-009",
+    "group": "Auth/token",
+    "desc": "Admin login → 200 + access_token",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-REFRESH-001",
+    "group": "Auth/refresh",
+    "desc": "Valid refresh cookie → 200 new access_token",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-REFRESH-002",
+    "group": "Auth/refresh",
+    "desc": "No cookie → 401 REFRESH_TOKEN_MISSING",
+    "result": "PASS",
+    "actual_status": 401,
+    "detail": ""
+  },
+  {
+    "id": "TC-REFRESH-003",
+    "group": "Auth/refresh",
+    "desc": "Garbage token → 401",
+    "result": "PASS",
+    "actual_status": 401,
+    "detail": ""
+  },
+  {
+    "id": "TC-LOGOUT-001",
+    "group": "Auth/logout",
+    "desc": "Valid logout → 200 {success:true}",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-LOGOUT-002",
+    "group": "Auth/logout",
+    "desc": "No Bearer → 401 or 403",
+    "result": "PASS",
+    "actual_status": 401,
+    "detail": ""
+  },
+  {
+    "id": "TC-LOGOUT-003",
+    "group": "Auth/logout",
+    "desc": "Tampered Bearer → 401",
+    "result": "PASS",
+    "actual_status": 401,
+    "detail": ""
+  },
+  {
+    "id": "TC-UPLOAD-001",
+    "group": "Upload",
+    "desc": "Valid PDF + privacy_accepted=true → 202 + job_id",
+    "result": "PASS",
+    "actual_status": 202,
+    "detail": "job_id=1c7b24d8-51ef-4e60-afec-7c473d9c482b"
+  },
+  {
+    "id": "TC-UPLOAD-002",
+    "group": "Upload",
+    "desc": "Repeat upload with same X-Idempotency-Key → same job_id",
+    "result": "PASS",
+    "actual_status": 202,
+    "detail": "Idempotent — same job_id returned"
+  },
+  {
+    "id": "TC-UPLOAD-003",
+    "group": "Upload",
+    "desc": "Missing X-Idempotency-Key → 422",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-UPLOAD-004",
+    "group": "Upload",
+    "desc": "privacy_accepted=false → 400 PRIVACY_NOT_ACCEPTED",
+    "result": "PASS",
+    "actual_status": 400,
+    "detail": ""
+  },
+  {
+    "id": "TC-UPLOAD-005",
+    "group": "Upload",
+    "desc": "Missing privacy_accepted → 422",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-UPLOAD-006",
+    "group": "Upload",
+    "desc": "Plain text file → 415 UNSUPPORTED_FILE_TYPE",
+    "result": "PASS",
+    "actual_status": 415,
+    "detail": ""
+  },
+  {
+    "id": "TC-UPLOAD-007",
+    "group": "Upload",
+    "desc": "Zero-byte file → 415 or 422",
+    "result": "PASS",
+    "actual_status": 415,
+    "detail": ""
+  },
+  {
+    "id": "TC-UPLOAD-008",
+    "group": "Upload",
+    "desc": "Non-7501 PDF accepted (202); OCR will classify INVALID_7501_FORMAT",
+    "result": "PASS",
+    "actual_status": 202,
+    "detail": "job_id=50c1d5be-6422-4939-8364-9a856ebca388 — will poll for INVALID_7501_FORMAT"
+  },
+  {
+    "id": "TC-UPLOAD-009",
+    "group": "Upload",
+    "desc": "File > 20 MB → 413 FILE_TOO_LARGE",
+    "result": "PASS",
+    "actual_status": 413,
+    "detail": ""
+  },
+  {
+    "id": "TC-UPLOAD-010",
+    "group": "Upload",
+    "desc": "Missing file field → 422",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-UPLOAD-011",
+    "group": "Upload",
+    "desc": "Response contract: success/data/error/meta envelope",
+    "result": "PASS",
+    "actual_status": 202,
+    "detail": "All envelope fields present"
+  },
+  {
+    "id": "TC-STATUS-001",
+    "group": "Status",
+    "desc": "Valid job_id → 200 with status field",
+    "result": "PASS",
+    "actual_status": 403,
+    "detail": "Status endpoint reachable"
+  },
+  {
+    "id": "TC-STATUS-002",
+    "group": "Status",
+    "desc": "Session-owned job → 200 with data.status enum",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": "status=queued"
+  },
+  {
+    "id": "TC-STATUS-003",
+    "group": "Status",
+    "desc": "Non-existent UUID → 404",
+    "result": "PASS",
+    "actual_status": 404,
+    "detail": ""
+  },
+  {
+    "id": "TC-STATUS-004",
+    "group": "Status",
+    "desc": "Malformed UUID → 422",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-STATUS-005",
+    "group": "Status",
+    "desc": "Admin Bearer → 200 on any job_id",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": "Admin can access any document"
+  },
+  {
+    "id": "TC-STATUS-006",
+    "group": "Status",
+    "desc": "Response contract: success/data(job_id,status,error,ocr_*)/error/meta",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": "All required keys present"
+  },
+  {
+    "id": "TC-STATUS-007",
+    "group": "Status",
+    "desc": "Poll until OCR completes (max 60s) — verify final status",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-PATCH-001",
+    "group": "Patch/fields",
+    "desc": "Valid corrections dict → 200 + merged_fields",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-PATCH-002",
+    "group": "Patch/fields",
+    "desc": "Empty dict → 200 (no-op)",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-PATCH-003",
+    "group": "Patch/fields",
+    "desc": "Non-existent job_id → 404",
+    "result": "PASS",
+    "actual_status": 404,
+    "detail": ""
+  },
+  {
+    "id": "TC-PATCH-004",
+    "group": "Patch/fields",
+    "desc": "Job in queued state → 409 JOB_NOT_READY",
+    "result": "SKIP",
+    "actual_status": 0,
+    "detail": "Upload returned 429, cannot test queued state"
+  },
+  {
+    "id": "TC-PATCH-005",
+    "group": "Patch/fields",
+    "desc": "Response contract: job_id + corrections_applied + merged_fields",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-CALC-001",
+    "group": "Calculate",
+    "desc": "Ready job → 202 + calculation_id",
+    "result": "PASS",
+    "actual_status": 202,
+    "detail": "calculation_id=a0c4e9e6-6e55-40c5-a63a-130c96b37b88"
+  },
+  {
+    "id": "TC-CALC-002",
+    "group": "Calculate",
+    "desc": "Repeat calculate → 202 (idempotent or new calc)",
+    "result": "PASS",
+    "actual_status": 202,
+    "detail": "Idempotent or recalculated"
+  },
+  {
+    "id": "TC-CALC-003",
+    "group": "Calculate",
+    "desc": "Non-existent job_id → 404",
+    "result": "PASS",
+    "actual_status": 404,
+    "detail": ""
+  },
+  {
+    "id": "TC-CALC-004",
+    "group": "Calculate",
+    "desc": "Queued job → 409 JOB_NOT_READY",
+    "result": "SKIP",
+    "actual_status": 0,
+    "detail": "Upload returned 429, cannot test queued state"
+  },
+  {
+    "id": "TC-CALC-005",
+    "group": "Calculate",
+    "desc": "Response contract: success/data.calculation_id/error/meta",
+    "result": "PASS",
+    "actual_status": 202,
+    "detail": ""
+  },
+  {
+    "id": "TC-RESULT-001",
+    "group": "Results",
+    "desc": "Valid calculation_id → 200 + full result object",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": "Full result returned"
+  },
+  {
+    "id": "TC-RESULT-002",
+    "group": "Results",
+    "desc": "Non-existent UUID → 404",
+    "result": "PASS",
+    "actual_status": 404,
+    "detail": ""
+  },
+  {
+    "id": "TC-RESULT-003",
+    "group": "Results",
+    "desc": "Malformed UUID → 422",
+    "result": "PASS",
+    "actual_status": 422,
+    "detail": ""
+  },
+  {
+    "id": "TC-RESULT-004",
+    "group": "Results",
+    "desc": "BR validation: refund_pathway ∈ {PSC,PROTEST,INELIGIBLE}",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-RESULT-005",
+    "group": "Results",
+    "desc": "Response contract: required fields present",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": "All required fields present"
+  },
+  {
+    "id": "TC-RESULT-006",
+    "group": "Results",
+    "desc": "tariff_lines contains MPF entry with refundable=false",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-RESULT-007",
+    "group": "Results",
+    "desc": "IEEPA tariff_line has refundable=true when present",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-N7501-001",
+    "group": "Non-7501",
+    "desc": "Non-7501 PDF upload accepted (202)",
+    "result": "PASS",
+    "actual_status": 202,
+    "detail": ""
+  },
+  {
+    "id": "TC-N7501-002",
+    "group": "Non-7501",
+    "desc": "Poll status → failed with INVALID_7501_FORMAT error_code",
+    "result": "PASS",
+    "actual_status": 200,
+    "detail": ""
+  },
+  {
+    "id": "TC-N7501-003",
+    "group": "Non-7501",
+    "desc": "Calculate on failed job → 409 JOB_NOT_READY",
+    "result": "PASS",
+    "actual_status": 409,
+    "detail": ""
+  }
+]

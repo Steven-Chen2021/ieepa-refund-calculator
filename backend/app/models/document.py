@@ -72,8 +72,11 @@ class Document(TimestampMixin, Base):
         server_default=DocumentStatus.queued.value,
         index=True,
     )
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ocr_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     ocr_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # "direct_text" when pdfplumber reads a digital PDF; "ocr" otherwise
+    extraction_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Structured OCR output from Google Document AI / pytesseract
     # Schema mirrors the `extracted_fields` object in API spec §6.4.1
