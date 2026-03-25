@@ -290,8 +290,10 @@ async def get_document_status(
     data: dict = {
         "job_id": str(doc.id),
         "status": doc.status.value,
+        "error": doc.error_code,
         "ocr_provider": doc.ocr_provider,
         "ocr_confidence": doc.ocr_confidence,
+        "extraction_method": doc.extraction_method,
     }
 
     if doc.status in (DocumentStatus.completed, DocumentStatus.review_required):

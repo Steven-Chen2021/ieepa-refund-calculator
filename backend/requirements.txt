@@ -19,7 +19,9 @@ pydantic-settings==2.3.4
 
 # ── Auth & Security ──────────────────────────────────────
 PyJWT==2.8.0
-passlib[bcrypt]==1.7.4
+# passlib removed — password hashing uses bcrypt directly (passlib 1.7.4 is
+# incompatible with bcrypt >= 4.0 due to detect_wrap_bug using >72-byte test passwords)
+bcrypt>=4.0.0
 cryptography==42.0.8
 python-multipart==0.0.9
 

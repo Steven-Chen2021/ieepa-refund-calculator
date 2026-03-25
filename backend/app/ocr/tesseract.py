@@ -429,6 +429,7 @@ def run_tesseract(file_bytes: bytes, mime_type: str) -> OcrResult:
             return OcrResult(
                 provider="tesseract",
                 overall_confidence=0.0,
+                extraction_method="ocr",
                 fields={},
                 line_items=[],
                 raw_text="",
@@ -438,6 +439,7 @@ def run_tesseract(file_bytes: bytes, mime_type: str) -> OcrResult:
         return OcrResult(
             provider="tesseract",
             overall_confidence=overall_confidence,
+            extraction_method="ocr",
             fields={},
             line_items=[],
             raw_text=full_text,
@@ -458,6 +460,7 @@ def run_tesseract(file_bytes: bytes, mime_type: str) -> OcrResult:
     return OcrResult(
         provider="tesseract",
         overall_confidence=overall_confidence,
+        extraction_method="direct_text" if provider_detail == "pdfplumber" else "ocr",
         fields=header_fields,
         line_items=line_items,
         raw_text=full_text,

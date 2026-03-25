@@ -25,29 +25,30 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import bcrypt as _bcrypt
 import jwt
 import redis.asyncio as aioredis
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
 # ---------------------------------------------------------------------------
 # Password hashing (bcrypt, work factor ≥ 12)
+# Uses the `bcrypt` library directly to avoid passlib 1.7.4 / bcrypt ≥ 4.0
+# incompatibility (detect_wrap_bug exceeds the 72-byte limit enforced in 4+).
 # ---------------------------------------------------------------------------
 
-_pwd_ctx = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=12,
-)
+_BCRYPT_ROUNDS = 12
 
 
 def hash_password(plain: str) -> str:
-    return _pwd_ctx.hash(plain)
+    return _bcrypt.hashpw(plain.encode("utf-8"), _bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_ctx.verify(plain, hashed)
+    try:
+        return _bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------

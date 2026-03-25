@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import uuid
 from datetime import date
 from pathlib import Path
@@ -52,6 +53,17 @@ logger = logging.getLogger(__name__)
 
 # Confidence threshold below which the whole document is rejected (BR-010)
 _UNRECOGNISED_THRESHOLD: float = 0.50
+
+_FORM_7501_SIGNATURES: tuple[str, ...] = (
+    "cbp form 7501",
+    "entry summary",
+    "filer code",
+    "entry no",
+    "entry type",
+    "summary date",
+    "b/l or awb",
+    "line a. htsus no.",
+)
 
 # Celery task name (used when queuing from the API endpoint)
 TASK_NAME = "app.tasks.ocr.process_ocr_job"
@@ -102,20 +114,65 @@ async def _set_status(
     ocr_confidence: float | None = None,
     extracted_fields: dict | None = None,
     error_code: str | None = None,
+    extraction_method: str | None = None,
 ) -> None:
     """Patch the Document row with updated OCR state."""
-    values: dict = {"status": status}
+    values: dict = {"status": status, "error_code": error_code}
     if ocr_provider is not None:
         values["ocr_provider"] = ocr_provider
     if ocr_confidence is not None:
         values["ocr_confidence"] = ocr_confidence
     if extracted_fields is not None:
         values["extracted_fields"] = extracted_fields
+    if extraction_method is not None:
+        values["extraction_method"] = extraction_method
 
     await session.execute(
         update(Document).where(Document.id == job_id).values(**values)
     )
     await session.commit()
+
+
+def _count_populated_fields(ocr_result: OcrResult) -> int:
+    """Count extracted header fields that contain a non-empty value."""
+    count = 0
+    for field in ocr_result.fields.values():
+        value = field.value
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        count += 1
+    return count
+
+
+def _looks_like_cbp_7501(ocr_result: OcrResult) -> bool:
+    """
+    Heuristically determine whether OCR output resembles a CBP Form 7501.
+
+    Non-7501 digital PDFs can still produce readable text or even a high OCR
+    confidence, so we look for expected field coverage or characteristic 7501
+    labels before allowing the flow to continue.
+    """
+    populated_fields = _count_populated_fields(ocr_result)
+    if populated_fields >= 3 or len(ocr_result.line_items) > 0:
+        return True
+
+    raw_text = re.sub(r"\s+", " ", ocr_result.raw_text or "").lower()
+    signature_hits = sum(1 for marker in _FORM_7501_SIGNATURES if marker in raw_text)
+    return signature_hits >= 2 and (populated_fields >= 1 or len(raw_text) >= 100)
+
+
+def _classify_failure_code(ocr_result: OcrResult) -> str:
+    """Return the most appropriate failure code for the OCR output."""
+    if _looks_like_cbp_7501(ocr_result):
+        return "UNRECOGNISED_DOCUMENT"
+
+    raw_text_length = len(re.sub(r"\s+", "", ocr_result.raw_text or ""))
+    if raw_text_length < 100 and ocr_result.overall_confidence < _UNRECOGNISED_THRESHOLD:
+        return "UNRECOGNISED_DOCUMENT"
+
+    return "INVALID_7501_FORMAT"
 
 
 # ---------------------------------------------------------------------------
@@ -253,13 +310,30 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
                 )
             return
 
-        # ── Determine final status ────────────────────────────────────────────
-        extracted_dict = ocr_result.to_extracted_fields_dict()
-        review_count: int = extracted_dict.get("review_required_count", 0)
+    if not _looks_like_cbp_7501(ocr_result):
+        error_code = _classify_failure_code(ocr_result)
+        logger.warning(
+            "OCR job %s: OCR output does not resemble CBP Form 7501 — %s",
+            job_id,
+            error_code,
+        )
+        async with session_factory() as session:
+            await _set_status(
+                session,
+                job_id,
+                DocumentStatus.failed,
+                ocr_provider=ocr_result.provider,
+                ocr_confidence=ocr_result.overall_confidence,
+                error_code=error_code,
+            )
+        return
 
-        final_status = (
-            DocumentStatus.review_required if review_count > 0
-            else DocumentStatus.completed
+    # ── BR-010: reject if still unrecognised after fallback ───────────────
+    if ocr_result.overall_confidence < _UNRECOGNISED_THRESHOLD:
+        logger.warning(
+            "OCR job %s: %s confidence %.3f still below %.2f — UNRECOGNISED_DOCUMENT",
+            job_id, ocr_result.provider, ocr_result.overall_confidence,
+            _UNRECOGNISED_THRESHOLD,
         )
 
         logger.info(
@@ -278,7 +352,7 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
                 final_status,
                 ocr_provider=ocr_result.provider,
                 ocr_confidence=ocr_result.overall_confidence,
-                extracted_fields=extracted_dict,
+                error_code="UNRECOGNISED_DOCUMENT",
             )
     except Exception as exc:
         logger.exception("OCR job %s: unhandled exception in pipeline: %s", job_id, exc)
@@ -287,6 +361,32 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
                 await _set_status(session, job_id, DocumentStatus.failed)
         except Exception:
             logger.error("OCR job %s: failed to mark as FAILED in DB", job_id)
+
+
+    final_status = (
+        DocumentStatus.review_required if review_count > 0
+        else DocumentStatus.completed
+    )
+
+    logger.info(
+        "OCR job %s: provider=%s confidence=%.3f review_fields=%d status=%s",
+        job_id,
+        ocr_result.provider,
+        ocr_result.overall_confidence,
+        review_count,
+        final_status.value,
+    )
+
+    async with session_factory() as session:
+        await _set_status(
+            session,
+            job_id,
+            final_status,
+            ocr_provider=ocr_result.provider,
+            ocr_confidence=ocr_result.overall_confidence,
+            extracted_fields=extracted_dict,
+            extraction_method=ocr_result.extraction_method,
+        )
 
 
 # ---------------------------------------------------------------------------

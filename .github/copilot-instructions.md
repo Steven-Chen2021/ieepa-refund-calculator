@@ -167,3 +167,4 @@ npx playwright test tests/upload-flow.spec.ts  # Single spec
 - Backend (pytest): ≥ 80% coverage
 - Frontend (Vitest): ≥ 75% coverage
 - E2E (Playwright): critical user journeys (upload → review → results → lead capture)
+
