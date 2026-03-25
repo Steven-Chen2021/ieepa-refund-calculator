@@ -116,9 +116,6 @@ export default function ResultsPage(): JSX.Element {
             <span className="text-sm text-dark-gray">{t('results.pathway_label')}:</span>
             <PathwayBadge pathway={result.refund_pathway} large />
           </div>
-          <p className="text-sm text-dark-gray max-w-sm">
-            {t(pathwayNameKey as never)}
-          </p>
         </div>
       </div>
 
@@ -333,9 +330,12 @@ export default function ResultsPage(): JSX.Element {
       <div className="bg-gray-white border border-logo-blue rounded-none rounded-br-lg p-5 mb-6">
         <h3 className="font-heading font-semibold text-navy-blue mb-1">{t('results.lead_title')}</h3>
         <p className="text-sm text-dark-gray mb-3">{t('results.lead_desc')}</p>
-        <Link to="/register" className="text-sm font-semibold text-logo-blue hover:underline">
+        <a
+          href="mailto:us.tradecompliance@dimerco.com"
+          className="text-sm font-semibold text-logo-blue hover:underline"
+        >
           {t('results.lead_cta')}
-        </Link>
+        </a>
       </div>
 
       {/* ── Mandatory disclaimer (COMP-005 — must not be hidden) ─── */}
