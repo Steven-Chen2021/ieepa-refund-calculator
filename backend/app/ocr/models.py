@@ -62,6 +62,10 @@ class OcrResult:
     provider: str             # "google_document_ai" | "tesseract"
     overall_confidence: float # 0.0 – 1.0; < 0.50 triggers fallback / rejection
 
+    # "direct_text" when pdfplumber reads a digital PDF without image OCR;
+    # "ocr" for Google Document AI or pytesseract image-based extraction.
+    extraction_method: str = "ocr"
+
     fields: dict[str, OcrField] = field(default_factory=dict)
 
     # Each dict has string keys mapping to OcrField values.

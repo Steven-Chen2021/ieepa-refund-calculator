@@ -267,6 +267,7 @@ async def run_google_docai(
     return OcrResult(
         provider="google_document_ai",
         overall_confidence=overall_confidence,
+        extraction_method="ocr",
         fields=header_fields,
         line_items=line_items,
         raw_text=document.text,
