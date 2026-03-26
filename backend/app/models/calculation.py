@@ -10,8 +10,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Date, DateTime, Enum, Integer, JSON, Numeric, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -47,7 +46,7 @@ class Calculation(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     document_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
+        Uuid(as_uuid=True), nullable=False, index=True
     )
 
     status: Mapped[CalculationStatus] = mapped_column(
@@ -76,7 +75,7 @@ class Calculation(TimestampMixin, Base):
 
     # ── Calculation Results ───────────────────────────────────
     # Full duty breakdown — array of DutyComponent objects
-    duty_components: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    duty_components: Mapped[list | None] = mapped_column(JSON, nullable=True)
     total_duty: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     estimated_refund: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
 
@@ -110,11 +109,11 @@ class CalculationAudit(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     calculation_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
+        Uuid(as_uuid=True), nullable=False, index=True
     )
 
     # Full point-in-time snapshot of the calculation result
-    snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

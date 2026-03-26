@@ -24,6 +24,7 @@ import magic  # python-magic — SEC-007
 import redis.asyncio as aioredis
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Cookie,
     Depends,
     File,
@@ -50,7 +51,7 @@ from app.engine.calculator import (
 )
 from app.models.calculation import Calculation, CalculationStatus
 from app.models.document import Document, DocumentStatus
-from app.tasks.ocr import TASK_NAME, store_upload_encrypted
+from app.tasks.ocr import process_ocr_job, store_upload_encrypted
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -129,6 +130,7 @@ async def _validate_file(file: UploadFile) -> bytes:
 async def upload_document(
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF / JPEG / PNG, max 20 MB"),
     privacy_accepted: str = Form(..., description='Must be "true"'),
     x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
@@ -147,10 +149,11 @@ async def upload_document(
     5. Magic Bytes MIME validation via python-magic (SEC-007)
     6. File size ≤ 20 MB
     7. File encrypted with Fernet before writing to disk (SEC-002)
-    8. OCR Celery job enqueued
+    8. OCR background job triggered
 
     Response: 202 Accepted with { job_id, status, expires_at }
     """
+    # ... (privacy and idempotency checks omitted for brevity in replace, but I must include them)
     # ── 1. Privacy consent ────────────────────────────────────────────────
     if privacy_accepted.lower() != "true":
         raise HTTPException(
@@ -229,10 +232,8 @@ async def upload_document(
     )
     await db.commit()
 
-    # ── 10. Enqueue Celery OCR task ───────────────────────────────────────
-    from app.celery_app import celery_app  # local import avoids circular deps at module load
-
-    celery_app.send_task(TASK_NAME, args=[str(job_id)])
+    # ── 10. Trigger OCR job in background ─────────────────────────────────
+    process_ocr_job.delay(str(job_id))
 
     # ── 11. Set session cookie for guests ─────────────────────────────────
     if is_new_session and session_id:

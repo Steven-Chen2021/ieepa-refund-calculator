@@ -3,7 +3,7 @@ Document model — represents an uploaded CBP Form 7501.
 
 The physical file is AES-256-GCM encrypted and stored under
 /data/uploads/{YYYY-MM-DD}/{job_id}/original.{ext}.
-OCR results and user corrections are stored as JSONB blobs.
+OCR results and user corrections are stored as JSON blobs.
 """
 from __future__ import annotations
 
@@ -11,8 +11,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Boolean, DateTime, Enum, Float, Integer, JSON, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -32,7 +31,7 @@ class Document(TimestampMixin, Base):
     One row per uploaded Form 7501 file / OCR job.
 
     `id` is the `job_id` returned to the client.
-    `extracted_fields` holds the raw OCR output (JSONB, see API spec §6.4.1).
+    `extracted_fields` holds the raw OCR output (JSON, see API spec §6.4.1).
     `corrections` holds user-applied field corrections from PATCH /fields.
     File on disk is encrypted; `encrypted_file_path` is the relative path
     under DATA_ROOT.
@@ -44,7 +43,7 @@ class Document(TimestampMixin, Base):
 
     # Optional FK to a registered user; NULL for guest uploads
     user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
+        Uuid(as_uuid=True), nullable=True, index=True
     )
     # Anonymous session identifier (cookie-based)
     session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
@@ -80,10 +79,10 @@ class Document(TimestampMixin, Base):
 
     # Structured OCR output from Google Document AI / pytesseract
     # Schema mirrors the `extracted_fields` object in API spec §6.4.1
-    extracted_fields: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    extracted_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # User corrections applied via PATCH /api/v1/documents/{job_id}/fields
-    corrections: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    corrections: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # TTL: document row and encrypted file expire at this timestamp
     # Celery Beat cleanup task checks this field

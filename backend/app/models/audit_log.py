@@ -9,8 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import DateTime, JSON, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -31,7 +30,7 @@ class AuditLog(Base):
 
     # NULL for system-generated events (e.g., Celery Beat tasks)
     admin_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
+        Uuid(as_uuid=True), nullable=True, index=True
     )
 
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
@@ -39,8 +38,8 @@ class AuditLog(Base):
     resource_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Snapshots of the record before and after the change
-    old_value: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    new_value: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    old_value: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    new_value: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Source IP address for security auditing
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)

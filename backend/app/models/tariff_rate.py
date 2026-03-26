@@ -12,8 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, Numeric, String, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Date, DateTime, Enum, Numeric, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -71,5 +70,5 @@ class TariffRate(TimestampMixin, Base):
 
     # Admin user who last updated this record (FK enforced at app layer)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
+        Uuid(as_uuid=True), nullable=True
     )

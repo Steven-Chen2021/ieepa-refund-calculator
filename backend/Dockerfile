@@ -4,6 +4,7 @@ WORKDIR /app
 
 # System dependencies (Tesseract + poppler for OCR fallback, WeasyPrint deps)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    redis-server \
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-chi-sim \
@@ -34,5 +35,17 @@ FROM base AS production
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 COPY . .
 RUN chown -R appuser:appuser /app
-USER appuser
+
+# 指定 Docker 內部使用的正確路徑
+ENV DATA_ROOT=/app/data
+ENV UPLOAD_DIR=/app/data/uploads
+ENV REPORTS_DIR=/app/data/reports
+ENV KEYS_DIR=/app/data/keys
+ENV FERNET_KEY_PATH=/app/data/keys/app_secret.key
+ENV DATABASE_URL=sqlite+aiosqlite:///app/ieepa.db
+
+# 給予執行權限
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 8000
+ENTRYPOINT ["/app/entrypoint.sh"]

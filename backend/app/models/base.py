@@ -6,8 +6,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, func, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -28,9 +27,9 @@ class TimestampMixin:
 
 
 def uuid_pk() -> Mapped[uuid.UUID]:
-    """Standard UUID primary key column (PostgreSQL native UUID type)."""
+    """Standard UUID primary key column (database-agnostic Uuid type)."""
     return mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
         nullable=False,
