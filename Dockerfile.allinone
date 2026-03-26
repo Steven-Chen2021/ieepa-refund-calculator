@@ -1,0 +1,64 @@
+# Stage 1: Build Frontend
+FROM node:18-slim AS frontend-builder
+WORKDIR /app/frontend
+# Use --omit=dev for production-only node_modules if needed, but Vite needs devDeps for build
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Final Image
+FROM python:3.11-slim
+
+# Install system dependencies
+# tesseract-ocr, libmagic1 (SEC-007), poppler-utils (pdf2image), nginx, redis
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    libmagic1 \
+    poppler-utils \
+    nginx \
+    redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Create necessary directories for throwaway storage
+RUN mkdir -p /data/uploads /data/reports /data/keys
+
+# Install backend dependencies
+COPY backend/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy backend code
+# Note: we copy app/ directly so app.main:app works with PYTHONPATH=.
+COPY backend/app ./app
+COPY backend/alembic ./alembic
+COPY backend/alembic.ini ./
+COPY backend/entrypoint.sh ./
+
+# Copy built frontend to backend static dir
+RUN mkdir -p /app/app/static
+COPY --from=frontend-builder /app/frontend/dist /app/app/static
+
+# Copy nginx config (Use a simplified one for all-in-one container)
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV ENVIRONMENT=production
+ENV DATA_ROOT=/data
+ENV UPLOAD_DIR=/data/uploads
+ENV REPORTS_DIR=/data/reports
+ENV KEYS_DIR=/data/keys
+ENV FERNET_KEY_PATH=/data/keys/app_secret.key
+ENV DATABASE_URL=sqlite+aiosqlite:///./ieepa.db
+ENV GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/google_service_account.json
+
+# Expose port (Dimerco standard often uses 8000 or custom ports)
+EXPOSE 8000
+
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
+
+# Start using entrypoint
+CMD ["/app/entrypoint.sh"]

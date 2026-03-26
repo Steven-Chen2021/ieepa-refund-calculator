@@ -1,106 +1,25 @@
-# docker-compose.yml — Development
-# Usage: docker compose up -d
-# Starts: api, worker, beat, db (PostgreSQL 15), redis, mailhog
-# Note: frontend dev server — run separately with: cd frontend && npm run dev
+# docker-compose.yml — Production (All-in-one)
+# This configuration uses the single All-in-one image that includes Nginx, Frontend, Backend, and Redis.
 
 services:
-
-  # ─────────────────────────────────────────────────────────
-  # Backend API — FastAPI + Uvicorn (--reload)
-  # ─────────────────────────────────────────────────────────
-  api:
+  ieepa-app:
     build:
-      context: ./backend
-      target: development
+      context: .
+      dockerfile: Dockerfile.allinone
+    image: 10.161.254.241/dimerco/ieepa-refund-calculator:V1.0.0
+    container_name: IEEPA-Calculator-Service
     ports:
-      - "8000:8000"
+      - "8080:80"
+      - "8443:443"
     volumes:
-      - ./backend:/app
-      - ./data:/data
-    env_file:
-      - ./backend/.env
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  # ─────────────────────────────────────────────────────────
-  # Celery Worker — OCR / Calculation / PDF / CRM / Cleanup
-  # ─────────────────────────────────────────────────────────
-  worker:
-    build:
-      context: ./backend
-      target: development
-    volumes:
-      - ./backend:/app
-      - ./data:/data
-    env_file:
-      - ./backend/.env
-    command: celery -A app.celery_app worker --loglevel=debug --concurrency=4
-    depends_on:
-      - redis
-      - db
-
-  # ─────────────────────────────────────────────────────────
-  # Celery Beat — Scheduled tasks (file TTL cleanup, etc.)
-  # ─────────────────────────────────────────────────────────
-  beat:
-    build:
-      context: ./backend
-      target: development
-    volumes:
-      - ./backend:/app
-      - ./data:/data
-    env_file:
-      - ./backend/.env
-    command: celery -A app.celery_app beat --loglevel=info
-    depends_on:
-      - redis
-
-  # ─────────────────────────────────────────────────────────
-  # PostgreSQL 15
-  # ─────────────────────────────────────────────────────────
-  db:
-    image: postgres:15-alpine
+      - ieepa_data:/data
+      # 掛載憑證至容器內 Nginx 預期路徑
+      - ./certs:/etc/nginx/ssl:ro
     environment:
-      POSTGRES_DB: ieepa_refund_db
-      POSTGRES_USER: ieepa_app
-      POSTGRES_PASSWORD: dev_password_only
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"    # exposed for local tooling in dev only
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ieepa_app -d ieepa_refund_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ─────────────────────────────────────────────────────────
-  # Redis 7 — Celery broker + result backend + rate-limit counters
-  # ─────────────────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"    # exposed for local tooling in dev only
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ─────────────────────────────────────────────────────────
-  # MailHog — Local SMTP server (replaces AWS SES in dev)
-  # Web UI: http://localhost:8025
-  # SMTP:   localhost:1025
-  # ─────────────────────────────────────────────────────────
-  mailhog:
-    image: mailhog/mailhog:latest
-    ports:
-      - "1025:1025"    # SMTP
-      - "8025:8025"    # Web UI
+      - ENVIRONMENT=production
+      - CORS_ORIGINS=https://localhost
+      - DATABASE_URL=sqlite+aiosqlite:////data/ieepa.db
+    restart: always
 
 volumes:
-  postgres_data:
+  ieepa_data:

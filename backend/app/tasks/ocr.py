@@ -229,7 +229,7 @@ def store_upload_encrypted(
 
 async def _run_ocr_pipeline(job_id_str: str) -> None:
     """
-    Full OCR pipeline for one document.  Runs inside ``asyncio.run()``.
+    Full OCR pipeline for one document. Runs inside ``asyncio.run()``.
     """
     job_id = uuid.UUID(job_id_str)
     session_factory = _make_async_session()
@@ -249,7 +249,7 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
         encrypted_path = _resolve_encrypted_path(doc.encrypted_file_path or "")
         try:
             file_bytes = decrypt_file_to_bytes(encrypted_path, settings.FERNET_KEY_PATH)
-        except (FileNotFoundError, Exception) as exc:
+        except Exception as exc:
             logger.error("OCR job %s: decryption failed: %s", job_id, exc)
             async with session_factory() as session:
                 await _set_status(session, job_id, DocumentStatus.failed)
@@ -259,26 +259,27 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
 
         # ── Attempt primary: Google Document AI ───────────────────────────────
         ocr_result: OcrResult | None = None
-        used_fallback = False
-
+        
         try:
-            if not settings.GOOGLE_DOC_AI_PROCESSOR_ID or "REPLACE_WITH" in settings.GOOGLE_DOC_AI_PROCESSOR_ID:
-                raise ValueError("GOOGLE_DOC_AI_PROCESSOR_ID is not configured")
-            # Google client is synchronous; run in thread
-            ocr_result = await asyncio.to_thread(asyncio.run, run_google_docai(file_bytes, mime_type))
+            if settings.GOOGLE_DOC_AI_PROCESSOR_ID and "REPLACE_WITH" not in settings.GOOGLE_DOC_AI_PROCESSOR_ID:
+                # Google client is synchronous; run_google_docai is async but blocking.
+                # Since we are in a single-task worker, awaiting is fine, but to_thread
+                # would be cleaner if it was purely sync. Given it's async def:
+                ocr_result = await run_google_docai(file_bytes, mime_type)
         except Exception as exc:
             logger.warning(
-                "OCR job %s: Google Document AI failed (%s), switching to Tesseract",
+                "OCR job %s: Google Document AI failed (%s)",
                 job_id, exc,
             )
 
+        # ── Fallback: pytesseract ─────────────────────────────────────────
         if ocr_result is None or ocr_result.overall_confidence < _UNRECOGNISED_THRESHOLD:
             if ocr_result is not None:
                 logger.warning(
-                    "OCR job %s: Google Document AI confidence %.3f < %.2f, using Tesseract",
+                    "OCR job %s: Google Document AI confidence %.3f < %.2f",
                     job_id, ocr_result.overall_confidence, _UNRECOGNISED_THRESHOLD,
                 )
-            # ── Fallback: pytesseract ─────────────────────────────────────────
+            
             if not settings.OCR_FALLBACK_ENABLED:
                 logger.warning("OCR job %s: fallback disabled, rejecting document", job_id)
                 async with session_factory() as session:
@@ -286,16 +287,16 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
                 return
 
             try:
+                logger.info("OCR job %s: switching to Tesseract fallback", job_id)
                 # Tesseract is CPU-bound and synchronous; run in thread
                 ocr_result = await asyncio.to_thread(run_tesseract, file_bytes, mime_type)
-                used_fallback = True
             except Exception as exc:
                 logger.error("OCR job %s: Tesseract also failed: %s", job_id, exc)
                 async with session_factory() as session:
                     await _set_status(session, job_id, DocumentStatus.failed)
                 return
 
-        # ── BR-010: reject if still unrecognised after fallback ───────────────
+        # ── BR-010: reject if still unrecognised or doesn't look like a 7501 ──
         if ocr_result.overall_confidence < _UNRECOGNISED_THRESHOLD:
             logger.warning(
                 "OCR job %s: %s confidence %.3f still below %.2f — UNRECOGNISED_DOCUMENT",
@@ -307,33 +308,32 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
                     session, job_id, DocumentStatus.failed,
                     ocr_provider=ocr_result.provider,
                     ocr_confidence=ocr_result.overall_confidence,
+                    error_code="UNRECOGNISED_DOCUMENT",
                 )
             return
 
-    if not _looks_like_cbp_7501(ocr_result):
-        error_code = _classify_failure_code(ocr_result)
-        logger.warning(
-            "OCR job %s: OCR output does not resemble CBP Form 7501 — %s",
-            job_id,
-            error_code,
-        )
-        async with session_factory() as session:
-            await _set_status(
-                session,
-                job_id,
-                DocumentStatus.failed,
-                ocr_provider=ocr_result.provider,
-                ocr_confidence=ocr_result.overall_confidence,
-                error_code=error_code,
+        if not _looks_like_cbp_7501(ocr_result):
+            error_code = _classify_failure_code(ocr_result)
+            logger.warning(
+                "OCR job %s: OCR output does not resemble CBP Form 7501 — %s",
+                job_id, error_code,
             )
-        return
+            async with session_factory() as session:
+                await _set_status(
+                    session, job_id, DocumentStatus.failed,
+                    ocr_provider=ocr_result.provider,
+                    ocr_confidence=ocr_result.overall_confidence,
+                    error_code=error_code,
+                )
+            return
 
-    # ── BR-010: reject if still unrecognised after fallback ───────────────
-    if ocr_result.overall_confidence < _UNRECOGNISED_THRESHOLD:
-        logger.warning(
-            "OCR job %s: %s confidence %.3f still below %.2f — UNRECOGNISED_DOCUMENT",
-            job_id, ocr_result.provider, ocr_result.overall_confidence,
-            _UNRECOGNISED_THRESHOLD,
+        # ── Final success processing ─────────────────────────────────────────
+        extracted_dict = ocr_result.to_extracted_fields_dict()
+        review_count = extracted_dict.get("review_required_count", 0)
+        
+        final_status = (
+            DocumentStatus.review_required if review_count > 0
+            else DocumentStatus.completed
         )
 
         logger.info(
@@ -352,8 +352,10 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
                 final_status,
                 ocr_provider=ocr_result.provider,
                 ocr_confidence=ocr_result.overall_confidence,
-                error_code="UNRECOGNISED_DOCUMENT",
+                extracted_fields=extracted_dict,
+                extraction_method=ocr_result.extraction_method,
             )
+
     except Exception as exc:
         logger.exception("OCR job %s: unhandled exception in pipeline: %s", job_id, exc)
         try:
@@ -362,31 +364,6 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
         except Exception:
             logger.error("OCR job %s: failed to mark as FAILED in DB", job_id)
 
-
-    final_status = (
-        DocumentStatus.review_required if review_count > 0
-        else DocumentStatus.completed
-    )
-
-    logger.info(
-        "OCR job %s: provider=%s confidence=%.3f review_fields=%d status=%s",
-        job_id,
-        ocr_result.provider,
-        ocr_result.overall_confidence,
-        review_count,
-        final_status.value,
-    )
-
-    async with session_factory() as session:
-        await _set_status(
-            session,
-            job_id,
-            final_status,
-            ocr_provider=ocr_result.provider,
-            ocr_confidence=ocr_result.overall_confidence,
-            extracted_fields=extracted_dict,
-            extraction_method=ocr_result.extraction_method,
-        )
 
 
 # ---------------------------------------------------------------------------

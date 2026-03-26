@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: str = "localhost,127.0.0.1"
 
     # ── CORS ─────────────────────────────────────────────────
-    CORS_ORIGINS: str = "http://localhost:5173"
+    CORS_ORIGINS: str = "http://localhost:5173,https://localhost"
     CORS_ALLOW_CREDENTIALS: bool = True
 
     # ── JWT ──────────────────────────────────────────────────

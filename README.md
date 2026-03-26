@@ -57,18 +57,14 @@ This tool automates the entire process — from OCR extraction of Form 7501 fiel
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│              Tier 1: Presentation (Frontend)             │
-│         React 18 SPA  ←→  Nginx (static + proxy)        │
-└─────────────────────────┬───────────────────────────────┘
-                          │ HTTP/HTTPS (TLS via Nginx)
-┌─────────────────────────▼───────────────────────────────┐
-│              Tier 2: Application (Backend)               │
-│    FastAPI (Uvicorn/Gunicorn)  +  Celery Workers         │
-└──────┬──────────────────────────────────┬───────────────┘
-       │ SQLAlchemy (async)               │ Redis (queue/cache)
-┌──────▼──────────────────────────────────▼───────────────┐
-│              Tier 3: Data                                 │
-│    PostgreSQL 15  |  Redis 7  |  Local File System       │
+│              Tier 1: All-in-one Container               │
+│ [ Nginx (HTTPS) ] ◄── SSL termination, serves React UI  │
+│        │                                                │
+│        ├──── /api/*  ──────► [ FastAPI :8000 ]          │
+│        │                            │                   │
+│        │                     [ Redis / Celery ]         │
+│        │                            │                   │
+│        └──── /*  ──────────► [ React Static Files ]     │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -193,7 +189,7 @@ ai_specs/                # Authoritative specification documents
 ### Prerequisites
 
 - Docker 24+ and Docker Compose v2
-- GCP service account JSON with Document AI access (optional — falls back to pytesseract)
+- SSL Certificates (`server.crt` and `server.key`) placed in the `certs/` directory.
 
 ### 1. Clone and configure
 
@@ -203,47 +199,54 @@ cd ieepa-refund-calculator
 
 # Copy environment template
 cp backend/.env.example backend/.env
-# Edit backend/.env and fill in all required values
+# Edit backend/.env if necessary
 ```
 
-### 2. Generate encryption key
+### 2. Start all services (Unified)
+
+We use a multi-stage Docker build that automatically compiles the React frontend and packages it with the FastAPI backend and Nginx.
 
 ```bash
-python init_keys.py
-# Creates data/keys/app_secret.key (chmod 600, gitignored)
+# Build and start all services in the background
+docker compose up --build -d
 ```
 
-### 3. Start services
+> **Note**: The first build may take a few minutes as it performs `npm install` and `npm run build` inside the container.
 
-```bash
-# Start all backend services (API, Celery, DB, Redis, MailHog)
-docker compose up -d
-
-# Apply database migrations (first time only)
-docker compose exec api alembic upgrade head
-```
-
-### 4. Start the frontend dev server
-
-The frontend runs separately from Docker using the local Node.js toolchain:
-
-```bash
-cd frontend
-npm install      # first time only
-npm run dev      # starts Vite dev server on http://localhost:5173
-```
-
-> The Vite dev server proxies `/api/*` requests to `http://localhost:8000` automatically.
-
-### 5. Access the application
+### 3. Access the application
 
 | Service | URL |
 |---------|-----|
-| Frontend (dev) | http://localhost:5173 |
-| API | http://localhost:8000 |
-| API Docs (Swagger UI) | http://localhost:8000/api/docs |
-| Health check | http://localhost:8000/health |
-| MailHog (dev SMTP) | http://localhost:8025 |
+| **Web Portal (HTTPS)** | **https://localhost** |
+| Web Portal (HTTP) | http://localhost (Redirects to HTTPS) |
+| API Docs (Swagger UI) | https://localhost/api/docs |
+| Health check | https://localhost/api/health |
+
+---
+
+## Development Workflow
+
+### Frontend Development (HMR)
+
+If you are actively developing the frontend and need Hot Module Replacement (HMR), run it outside Docker:
+
+```bash
+cd frontend
+npm install
+npm run dev      # Starts Vite on http://localhost:5173
+```
+
+### Backend Development
+
+The backend services (Postgres, Redis, Worker) should remain running in Docker. You can run the FastAPI app locally for faster debugging:
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
 
 ---
 
