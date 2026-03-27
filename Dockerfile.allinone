@@ -54,8 +54,8 @@ ENV FERNET_KEY_PATH=/data/keys/app_secret.key
 ENV DATABASE_URL=sqlite+aiosqlite:///./ieepa.db
 ENV GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/google_service_account.json
 
-# Expose port (Dimerco standard often uses 8000 or custom ports)
-EXPOSE 8000
+# Expose port 80 (Nginx serves frontend + proxies /api to Uvicorn on 8000)
+EXPOSE 80
 
 # Make entrypoint executable
 RUN chmod +x entrypoint.sh
