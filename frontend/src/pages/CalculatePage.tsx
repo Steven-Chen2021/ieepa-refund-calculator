@@ -9,7 +9,6 @@ import StepIndicator from '../components/ui/StepIndicator'
 import type { UploadStatus } from '../store/uploadStore'
 import { useUploadStore } from '../store/uploadStore'
 
-const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png']
 const MAX_BYTES = 20 * 1024 * 1024
 
 function formatBytes(bytes: number): string {
@@ -325,10 +324,6 @@ export default function CalculatePage(): JSX.Element {
 
         </div>
 
-        {/* File type reminder when no file and not visible above */}
-        {!ALLOWED_MIME.includes(file?.type ?? '') && !file && !isProcessing && (
-          <p className="mt-3 text-center text-xs text-brand-gray">{t('calculate.dropzone_hint')}</p>
-        )}
       </div>
     </div>
   )
