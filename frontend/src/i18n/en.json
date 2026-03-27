@@ -64,8 +64,8 @@
   },
   "review": {
     "title": "Review Extracted Fields",
-    "subtitle": "Fields highlighted in amber require your attention — click to edit.",
-    "subtitle_direct": "Fields were extracted directly from the digital PDF. Click any field to edit if needed.",
+    "subtitle": "Fields highlighted in amber had low OCR confidence — please review before proceeding.",
+    "subtitle_direct": "Please verify the info below, or contact US.tradecompliance@dimerco.com for further support.",
     "amber_warning_one": "{{count}} field still requires review",
     "amber_warning_other": "{{count}} fields still require review",
     "header_fields": "Entry Header",
@@ -92,7 +92,6 @@
     "main_label": "Main",
     "confidence": "{{pct}}% confidence",
     "read_failed": "Read Failed",
-    "edited": "Edited",
     "total_duty": "Total Duty + Fees",
     "btn_back": "← Back to Upload",
     "btn_confirm": "Confirm & Calculate →"
@@ -139,7 +138,7 @@
     "btn_new": "Start New Calculation",
     "lead_title": "Want to file for a refund?",
     "lead_desc": "Our customs experts can handle the entire PSC / Protest filing process.",
-    "lead_cta": "Contact Dimerco Customs Advisory →",
+    "lead_cta": "Contact Dimerco Customs Advisory",
     "disclaimer": "This estimate is for informational purposes only and does not constitute legal or tax advice. Actual refund amounts may differ based on CBP review. Dimerco Express Group assumes no liability for reliance on this estimate. Consult a licensed Customs House Broker (CHB) before filing any claim."
   },
   "common": {

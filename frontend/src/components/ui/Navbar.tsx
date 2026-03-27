@@ -14,9 +14,7 @@ export default function Navbar(): JSX.Element {
     <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-white border-b border-gray-200 shadow-sm font-body">
       <div className="max-w-6xl mx-auto h-full px-4 flex items-center justify-between">
         {/* Dimerco Logo */}
-        <Link to="/" className="flex items-center">
-          <DimercoLogo className="h-7 w-auto" />
-        </Link>
+        <DimercoLogo className="h-7 w-auto" />
 
         {/* Right actions */}
         <div className="flex items-center gap-3">

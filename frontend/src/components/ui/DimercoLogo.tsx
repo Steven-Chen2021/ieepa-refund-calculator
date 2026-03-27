@@ -1,6 +1,7 @@
 export default function DimercoLogo({ className }: { className?: string }): JSX.Element {
   return (
-    <svg
+    <a href="https://www.dimerco.com" target="_blank" rel="noopener noreferrer" aria-label="Dimerco website">
+      <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 200 50"
       className={className ?? 'h-8 w-auto'}
@@ -16,5 +17,6 @@ export default function DimercoLogo({ className }: { className?: string }): JSX.
       <path fill="#f58b39" d="M156.02,37.93c44.72,0,40.68-30.7,40.68-30.7-4.81,18.82-21.51,24.59-40.51,24.59-9.21,0-60.98-.01-66.46-.01l-3.1,6.12h69.39Z"/>
       <path fill="#00a8e2" d="M197.43,16.07c-3.5,16.03-17.45,23.58-41.89,23.58-9.28,0-64.56-.01-69.78-.01l-3.1,6.12s33.07-.01,77.67-.01c40.41,0,37.1-29.67,37.1-29.67"/>
     </svg>
+    </a>
   )
 }

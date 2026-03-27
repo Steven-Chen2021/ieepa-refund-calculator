@@ -316,23 +316,13 @@ export default function ResultsPage(): JSX.Element {
         <p className="text-sm text-dark-gray">{t(pathwayDescKey as never)}</p>
       </div>
 
-      {/* ── Action buttons ──────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3 mb-6">
-        <Link
-          to="/calculate"
-          className="flex items-center gap-2 px-5 py-3 border border-logo-orange text-logo-orange bg-transparent rounded-none font-heading font-semibold hover:bg-orange-50 text-sm"
-        >
-          📋 {t('results.btn_new')}
-        </Link>
-      </div>
-
       {/* ── Lead CTA ────────────────────────────────────────── */}
       <div className="bg-gray-white border border-logo-blue rounded-none rounded-br-lg p-5 mb-6">
         <h3 className="font-heading font-semibold text-navy-blue mb-1">{t('results.lead_title')}</h3>
         <p className="text-sm text-dark-gray mb-3">{t('results.lead_desc')}</p>
         <a
           href="mailto:us.tradecompliance@dimerco.com"
-          className="text-sm font-semibold text-logo-blue hover:underline"
+          className="inline-block px-5 py-2.5 bg-logo-orange text-white text-sm font-semibold rounded-none rounded-br-lg hover:opacity-90 transition-opacity"
         >
           {t('results.lead_cta')}
         </a>

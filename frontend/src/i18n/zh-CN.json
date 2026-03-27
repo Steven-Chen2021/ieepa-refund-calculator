@@ -64,8 +64,8 @@
   },
   "review": {
     "title": "審查提取欄位",
-    "subtitle": "琥珀色標示欄位需要您確認，點擊即可編輯。",
-    "subtitle_direct": "欄位已直接從數位 PDF 讀取，如需修正請點擊欄位編輯。",
+    "subtitle": "琥珀色標示欄位為低信心度 OCR 結果，請確認後再繼續。",
+    "subtitle_direct": "請確認以下資訊，如需協助請聯絡 US.tradecompliance@dimerco.com。",
     "amber_warning_one": "仍有 {{count}} 個欄位需要審查",
     "amber_warning_other": "仍有 {{count}} 個欄位需要審查",
     "header_fields": "報關單基本資訊",
@@ -92,7 +92,6 @@
     "main_label": "主稅則",
     "confidence": "信心度 {{pct}}%",
     "read_failed": "讀取失敗",
-    "edited": "已編輯",
     "total_duty": "關稅 + 費用合計",
     "btn_back": "← 返回上傳",
     "btn_confirm": "確認並計算 →"
@@ -139,7 +138,7 @@
     "btn_new": "開始新計算",
     "lead_title": "想要申請退稅？",
     "lead_desc": "我們的報關專家可協助處理完整的 PSC / 抗議申請流程。",
-    "lead_cta": "聯絡 Dimerco 報關顧問 →",
+    "lead_cta": "聯絡 Dimerco 報關顧問",
     "disclaimer": "本估算僅供參考，不構成法律或稅務建議。實際退稅金額可能因 CBP 審查結果而異。Dimerco Express Group 對依賴本估算所產生的結果不承擔任何責任。提出任何申請前，請諮詢持牌報關行（CHB）。"
   },
   "common": {

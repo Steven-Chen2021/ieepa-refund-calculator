@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { calculate, getJobStatus, patchFields } from '../api/documents'
+import { calculate, getJobStatus } from '../api/documents'
 import type { ExtractedFields, LineItem, OcrField } from '../api/documents'
 import StepIndicator from '../components/ui/StepIndicator'
 import { useUploadStore } from '../store/uploadStore'
 
 /** Derive display colour from OcrField confidence per 7501_Parse.md §3 */
-function fieldColour(field: OcrField | undefined, edited: boolean): 'normal' | 'amber' | 'red' {
-  if (edited || !field) return 'normal'
+function fieldColour(field: OcrField | undefined): 'normal' | 'amber' | 'red' {
+  if (!field) return 'normal'
   if (field.read_failed || field.confidence < 0.5) return 'red'
   if (field.review_required || field.confidence < 0.80) return 'amber'
   return 'normal'
@@ -39,77 +39,44 @@ function TariffTypeBadge({ category }: { category: string }): JSX.Element {
 
 function FieldCell({
   field,
-  onEdit,
   showConfidence = true,
 }: {
   field: OcrField | undefined
-  onEdit: (val: string) => void
   showConfidence?: boolean
 }): JSX.Element {
   const { t } = useTranslation()
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(field?.value ?? '')
-  const [edited, setEdited] = useState(false)
 
   if (!field) return <span className="text-gray-400">—</span>
 
-  const colour = showConfidence ? fieldColour(field, edited) : 'normal'
+  const colour = showConfidence ? fieldColour(field) : 'normal'
   const pct = Math.round((field.confidence ?? 0) * 100)
-
-  if (editing) {
-    return (
-      <input
-        autoFocus
-        className="border border-logo-blue rounded px-2 py-1 text-sm w-full font-mono text-navy-blue outline-none ring-1 ring-logo-blue"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => {
-          setEditing(false)
-          setEdited(true)
-          onEdit(draft)
-        }}
-        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-      />
-    )
-  }
 
   const borderCls =
     colour === 'red'
       ? 'border-error bg-red-50'
       : colour === 'amber'
         ? 'border-logo-orange bg-orange-50'
-        : 'border-transparent hover:border-brand-gray'
+        : 'border-transparent'
 
   const hintCls =
     colour === 'red'
       ? 'text-error'
       : colour === 'amber'
         ? 'text-logo-orange-dark'
-        : edited
-          ? 'text-logo-blue'
-          : 'text-brand-gray'
+        : 'text-brand-gray'
 
   const hintText: string | null =
-    edited
-      ? `✏ ${t('review.edited')}`
-      : showConfidence
-        ? colour === 'red'
-          ? `✗ ${t('review.read_failed')}`
-          : colour === 'amber'
-            ? `⚠ ${t('review.confidence', { pct })}`
-            : `✓ ${t('review.confidence', { pct })}`
-        : null
+    showConfidence
+      ? colour === 'red'
+        ? `✗ ${t('review.read_failed')}`
+        : colour === 'amber'
+          ? `⚠ ${t('review.confidence', { pct })}`
+          : `✓ ${t('review.confidence', { pct })}`
+      : null
 
   return (
-    <div
-      className={`group cursor-pointer rounded px-2 py-1 border transition-colors ${borderCls}`}
-      onClick={() => setEditing(true)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setEditing(true) }}
-      aria-label={`Edit field, current value: ${draft}`}
-    >
-      <p className="text-sm font-medium">{draft || '—'}</p>
+    <div className={`rounded px-2 py-1 border ${borderCls}`}>
+      <p className="text-sm font-medium">{field.value || '—'}</p>
       {hintText && <p className={`text-xs mt-0.5 ${hintCls}`}>{hintText}</p>}
     </div>
   )
@@ -124,7 +91,6 @@ export default function ReviewPage(): JSX.Element {
   const { setCalculationId } = useUploadStore()
 
   const [fields, setFields] = useState<ExtractedFields | null>(null)
-  const [corrections, setCorrections] = useState<Record<string, string>>({})
   const [extractionMethod, setExtractionMethod] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -161,7 +127,6 @@ export default function ReviewPage(): JSX.Element {
   const handleConfirm = async (): Promise<void> => {
     setSubmitting(true)
     try {
-      if (Object.keys(corrections).length > 0) await patchFields(jobId, corrections)
       const { calculation_id } = await calculate(jobId)
       setCalculationId(calculation_id)
       navigate(`/results/${calculation_id}`)
@@ -170,9 +135,6 @@ export default function ReviewPage(): JSX.Element {
       setSubmitting(false)
     }
   }
-
-  const setField = (key: string, val: string): void =>
-    setCorrections((prev) => ({ ...prev, [key]: val }))
 
   if (loading) {
     return (
@@ -243,7 +205,6 @@ export default function ReviewPage(): JSX.Element {
               </label>
               <FieldCell
                 field={fields?.[fieldKey] as OcrField | undefined}
-                onEdit={(v) => setField(fieldKey, v)}
                 showConfidence={!isDirectRead}
               />
             </div>
@@ -293,7 +254,6 @@ export default function ReviewPage(): JSX.Element {
                         <td className="px-4 py-2 font-mono">
                           <FieldCell
                             field={li.hts_code}
-                            onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].hts_code`, v)}
                             showConfidence={!isDirectRead}
                           />
                         </td>
@@ -304,7 +264,6 @@ export default function ReviewPage(): JSX.Element {
                           {li.duty_rate ? (
                             <FieldCell
                               field={li.duty_rate}
-                              onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].duty_rate`, v)}
                               showConfidence={!isDirectRead}
                             />
                           ) : <span className="text-brand-gray">—</span>}
@@ -313,7 +272,6 @@ export default function ReviewPage(): JSX.Element {
                           {li.duty_amount ? (
                             <FieldCell
                               field={li.duty_amount}
-                              onEdit={(v) => setField(`line_items[${lineKey}][${rowIdx}].duty_amount`, v)}
                               showConfidence={!isDirectRead}
                             />
                           ) : <span className="text-brand-gray">—</span>}

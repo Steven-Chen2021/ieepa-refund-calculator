@@ -335,22 +335,40 @@ ports:
 ieepa-refund-calculator/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/endpoints/   # FastAPI route handlers
+│   │   ├── api/v1/endpoints/   # FastAPI route handlers (auth, documents, results)
 │   │   ├── core/config.py      # All settings (pydantic-settings)
+│   │   ├── engine/calculator.py# BR-001–BR-011 tariff calculation logic
+│   │   ├── middleware/         # Security headers middleware
 │   │   ├── models/             # SQLAlchemy ORM models
-│   │   ├── ocr/tesseract.py    # pdfplumber + Tesseract OCR engine
-│   │   └── engine/calculator.py# Tariff calculation logic
+│   │   ├── ocr/                # Google Document AI + Tesseract fallback + Fernet crypto
+│   │   ├── schemas/            # Pydantic v2 request/response schemas
+│   │   └── tasks/ocr.py        # Celery OCR task
 │   ├── alembic/                # Database migration scripts
+│   ├── scripts/                # Developer utility scripts (e.g. test_ocr_extraction.py)
+│   ├── tests/
+│   │   ├── unit/               # pytest unit tests (calculation, OCR confidence, classification)
+│   │   └── integration/        # pytest integration tests
 │   ├── requirements.txt        # Python dependencies
 │   └── .env                    # ← create from .env.example (never commit)
 ├── frontend/
-│   ├── src/pages/              # React pages (Home, Calculate, Review, Results)
-│   ├── src/components/         # Shared UI components
+│   ├── icon/                   # Static image assets
+│   │   ├── DimercoLogo.svg     # Dimerco brand logo (vector)
+│   │   ├── check.png           # Checkmark icon
+│   │   ├── uploadCloud.png     # Cloud upload icon
+│   │   └── wallet.png          # Wallet icon
+│   ├── src/
+│   │   ├── api/                # Axios API client (client.ts, documents.ts, results.ts)
+│   │   ├── components/ui/      # Shared UI components (Navbar, PathwayBadge, StepIndicator, …)
+│   │   ├── i18n/               # en.json + zh-CN.json translation files
+│   │   ├── pages/              # Route-level components (Home, Calculate, Review, Results)
+│   │   ├── store/              # Zustand global state (uploadStore)
+│   │   └── hooks/              # Custom React hooks
 │   └── tailwind.config.js      # Dimerco brand design tokens
 ├── data/
 │   ├── keys/app_secret.key     # ← Fernet encryption key (never commit)
 │   ├── uploads/                # Uploaded PDFs (auto-cleaned after 24h)
 │   └── reports/                # Generated reports (auto-cleaned after 90 days)
+├── 7501Samples/                # Sample CBP Form 7501 PDFs for development/testing
 ├── docker-compose.yml          # All backend services
 ├── init_keys.py                # Key generation utility
 └── .env.example                # Environment variable template

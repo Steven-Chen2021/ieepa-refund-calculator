@@ -158,10 +158,16 @@ backend/
     main.py              # FastAPI app factory
     celery_app.py        # Celery app instance
   alembic/               # DB migrations
+  scripts/               # Developer utility scripts (e.g. test_ocr_extraction.py)
   tests/
     unit/
     integration/
 frontend/
+  icon/                  # Static image assets
+    DimercoLogo.svg      # Dimerco brand logo (vector)
+    check.png            # Checkmark icon
+    uploadCloud.png      # Cloud upload icon
+    wallet.png           # Wallet icon
   index.html             # HTML entry point
   package.json           # npm dependencies (React 18, Vite 5, Tailwind 3, TanStack Query v5, …)
   vite.config.ts         # Vite config — dev server port 5173, /api proxy → localhost:8000
@@ -172,10 +178,15 @@ frontend/
     main.tsx             # React root — QueryClientProvider + BrowserRouter
     App.tsx              # Route definitions (/, /calculate, /review, /results/:id, /register, …)
     index.css            # Tailwind directives (@tailwind base/components/utilities)
-    components/{ui,forms,layout}/
+    api/
+      client.ts          # Axios instance with JWT interceptors
+      documents.ts       # Document upload / status / fields API calls
+      results.ts         # Results retrieval API calls
+    components/
+      ui/                # Shared UI components (Navbar, DimercoLogo, PathwayBadge, StepIndicator)
     pages/               # Route-level components (HomePage, CalculatePage, ReviewPage, ResultsPage)
     hooks/               # Custom React hooks
-    store/               # Zustand global state
+    store/               # Zustand global state (uploadStore)
     i18n/                # en.json + zh-CN.json
 nginx/                   # Reverse proxy config
 data/                    # Runtime data (uploads/, reports/, keys/) — gitignored
