@@ -65,7 +65,8 @@
   "review": {
     "title": "Review Extracted Fields",
     "subtitle": "Fields highlighted in amber had low OCR confidence — please review before proceeding.",
-    "subtitle_direct": "Please verify the info below, or contact US.tradecompliance@dimerco.com for further support.",
+    "subtitle_direct": "Please verify the info below, or contact",
+    "subtitle_direct_after": "for further support.",
     "amber_warning_one": "{{count}} field still requires review",
     "amber_warning_other": "{{count}} fields still require review",
     "header_fields": "Entry Header",

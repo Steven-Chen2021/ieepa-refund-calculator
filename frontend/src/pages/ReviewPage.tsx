@@ -175,7 +175,20 @@ export default function ReviewPage(): JSX.Element {
 
       <h1 className="text-2xl font-heading font-semibold text-navy-blue mb-1">{t('review.title')}</h1>
       <p className="text-dark-gray text-sm mb-6">
-        {t(isDirectRead ? 'review.subtitle_direct' : 'review.subtitle')}
+        {isDirectRead ? (
+          <>
+            {t('review.subtitle_direct')}{' '}
+            <a
+              href="mailto:US.tradecompliance@dimerco.com"
+              className="text-logo-blue underline hover:opacity-80"
+            >
+              Dimerco Customs Advisory
+            </a>
+            {' '}{t('review.subtitle_direct_after')}
+          </>
+        ) : (
+          t('review.subtitle')
+        )}
       </p>
 
       {/* Amber warning banner — only shown when OCR confidence indicators are relevant */}

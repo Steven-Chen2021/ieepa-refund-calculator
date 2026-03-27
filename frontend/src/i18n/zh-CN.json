@@ -65,7 +65,8 @@
   "review": {
     "title": "審查提取欄位",
     "subtitle": "琥珀色標示欄位為低信心度 OCR 結果，請確認後再繼續。",
-    "subtitle_direct": "請確認以下資訊，如需協助請聯絡 US.tradecompliance@dimerco.com。",
+    "subtitle_direct": "請確認以下資訊，如需協助請聯絡",
+    "subtitle_direct_after": "。",
     "amber_warning_one": "仍有 {{count}} 個欄位需要審查",
     "amber_warning_other": "仍有 {{count}} 個欄位需要審查",
     "header_fields": "報關單基本資訊",
