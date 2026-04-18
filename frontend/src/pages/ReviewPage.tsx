@@ -30,6 +30,13 @@ function TariffTypeBadge({ category }: { category: string }): JSX.Element {
       </span>
     )
   }
+  if (category === 'S232') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-300">
+        {t('review.s232_label')}
+      </span>
+    )
+  }
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-brand-gray">
       {t('review.main_label')}
@@ -274,7 +281,7 @@ export default function ReviewPage(): JSX.Element {
                           <TariffTypeBadge category={li.tariff_category} />
                         </td>
                         <td className="px-4 py-2">
-                          {li.duty_rate ? (
+                          {li.duty_rate?.value ? (
                             <FieldCell
                               field={li.duty_rate}
                               showConfidence={!isDirectRead}
@@ -282,7 +289,7 @@ export default function ReviewPage(): JSX.Element {
                           ) : <span className="text-brand-gray">—</span>}
                         </td>
                         <td className="px-4 py-2">
-                          {li.duty_amount ? (
+                          {li.duty_amount?.value ? (
                             <FieldCell
                               field={li.duty_amount}
                               showConfidence={!isDirectRead}

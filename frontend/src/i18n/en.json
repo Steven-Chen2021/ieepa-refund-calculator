@@ -90,6 +90,7 @@
     "col_amount": "Duty Amount",
     "ieepa_target": "IEEPA 退稅目標",
     "s301_label": "Section 301",
+    "s232_label": "Section 232",
     "main_label": "Main",
     "confidence": "{{pct}}% confidence",
     "read_failed": "Read Failed",

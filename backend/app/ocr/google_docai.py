@@ -205,7 +205,94 @@ def _parse_document(document: Any) -> tuple[dict[str, OcrField], list[dict[str, 
 
                 line_items.append(item)
 
+    line_items = _post_process_table_items(line_items)
     return header_fields, line_items
+
+
+def _post_process_table_items(
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """
+    Fix HTS code → duty rate matching after DocAI table extraction.
+
+    CBP Form 7501 Box 33 omits 0% duty rates, making positional matching of
+    table rows to rates unreliable. This function:
+
+    1. Inherits blank ``line_number`` cells from the previous non-blank row
+       (continuation rows in DocAI table parsing have no line_number cell).
+    2. Groups rows by line_number.  Within each group the row with a non-None
+       ``entered_value`` is the "main HTS" row; all other rows are supplementals.
+    3. Propagates the main HTS ``entered_value`` to every supplemental row so
+       that the calculation engine can derive duty for each code.
+    4. Collects all PDF-printed rate/duty pairs into ``pdf_rate_duty_pairs`` on
+       the main HTS row (for cross-validation) and clears ``duty_rate`` /
+       ``duty_amount`` on every row.  The DB enrichment step will fill correct
+       rates from the ``tariff_rates`` table.
+    """
+    # ── Step 1: inherit line_number for continuation rows ──────────────────
+    last_line_no: str | None = None
+    for item in items:
+        ln_field = item.get("line_number")
+        ln_val = ln_field.value if isinstance(ln_field, OcrField) else None
+        if ln_val:
+            last_line_no = str(ln_val).strip()
+            item["_line_no_key"] = last_line_no
+        elif last_line_no is not None:
+            item["_line_no_key"] = last_line_no
+        else:
+            item["_line_no_key"] = None
+
+    # ── Step 2: group by line_number key ───────────────────────────────────
+    from collections import OrderedDict
+    groups: OrderedDict[str | None, list[dict[str, Any]]] = OrderedDict()
+    for item in items:
+        key = item.get("_line_no_key")
+        groups.setdefault(key, []).append(item)
+
+    # ── Steps 3 & 4: propagate entered_value, collect pdf_pairs, clear rates ─
+    result: list[dict[str, Any]] = []
+    _missing = _make_field(None, 0.0)
+
+    for _key, group in groups.items():
+        # Identify main HTS row: has a non-None entered_value
+        main_item: dict[str, Any] | None = None
+        for row in group:
+            ev = row.get("entered_value")
+            if isinstance(ev, OcrField) and ev.value not in (None, ""):
+                main_item = row
+                break
+
+        # Collect PDF-printed rate/duty pairs from all rows in this group
+        pdf_pairs: list[dict[str, str]] = []
+        for row in group:
+            dr = row.get("duty_rate")
+            da = row.get("duty_amount")
+            dr_val = dr.value if isinstance(dr, OcrField) else None
+            da_val = da.value if isinstance(da, OcrField) else None
+            if dr_val and str(dr_val).strip():
+                pair: dict[str, str] = {"rate_pct": str(dr_val).strip()}
+                if da_val and str(da_val).strip():
+                    pair["duty_amount"] = str(da_val).strip().replace(",", "")
+                pdf_pairs.append(pair)
+            # Clear rate/duty on every row — enrichment fills these from DB
+            row["duty_rate"] = _missing
+            row["duty_amount"] = _missing
+
+        # Propagate entered_value to supplementals
+        if main_item is not None:
+            ev_field = main_item["entered_value"]
+            for row in group:
+                if row is not main_item:
+                    row["entered_value"] = ev_field
+            if pdf_pairs:
+                main_item["pdf_rate_duty_pairs"] = pdf_pairs
+
+        # Remove temporary helper key and emit rows
+        for row in group:
+            row.pop("_line_no_key", None)
+            result.append(row)
+
+    return result
 
 
 async def run_google_docai(

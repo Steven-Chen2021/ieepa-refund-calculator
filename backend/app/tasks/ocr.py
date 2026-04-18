@@ -48,6 +48,7 @@ from app.ocr.crypto import decrypt_file_to_bytes, encrypt_bytes_to_file
 from app.ocr.models import OcrResult
 from app.ocr.google_docai import run_google_docai
 from app.ocr.tesseract import run_tesseract
+from app.services.tariff_enrichment import enrich_extracted_fields
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +330,37 @@ async def _run_ocr_pipeline(job_id_str: str) -> None:
 
         # ── Final success processing ─────────────────────────────────────────
         extracted_dict = ocr_result.to_extracted_fields_dict()
+
+        # ── Post-OCR DB enrichment: resolve authoritative HTS rates ─────────
+        # CBP Form 7501 Box 33 omits 0% rates, making OCR rate extraction
+        # unreliable. We look up each HTS code's rate from the tariff_rates DB.
+        _summary_date_str: str = (
+            (extracted_dict.get("summary_date") or {}).get("value") or ""
+        )
+        _country_str: str = (
+            (extracted_dict.get("country_of_origin") or {}).get("value") or ""
+        ).upper().strip()
+
+        if _summary_date_str and _country_str:
+            try:
+                from datetime import datetime as _dt
+                _summary_date = _dt.strptime(_summary_date_str.strip(), "%m/%d/%Y").date()
+                async with session_factory() as _enrich_session:
+                    extracted_dict = await enrich_extracted_fields(
+                        extracted_dict, _country_str, _summary_date, _enrich_session,
+                    )
+            except Exception as _enrich_exc:
+                logger.warning(
+                    "OCR job %s: tariff enrichment failed (non-fatal): %s",
+                    job_id, _enrich_exc,
+                )
+        else:
+            logger.warning(
+                "OCR job %s: skipping tariff enrichment — "
+                "summary_date=%r country=%r not available",
+                job_id, _summary_date_str, _country_str,
+            )
+
         review_count = extracted_dict.get("review_required_count", 0)
         
         final_status = (

@@ -15,6 +15,13 @@ services:
       - ieepa_data:/data
       # 掛載憑證至容器內 Nginx 預期路徑
       - ./certs:/etc/nginx/ssl:ro
+      # Expose host-side Alembic migrations so new versions survive container restarts
+      - ./backend/alembic/versions:/app/alembic/versions:ro
+      # Updated Python source files (tariff enrichment + lazy re-enrichment in status endpoint)
+      - ./backend/app/services/tariff_enrichment.py:/app/app/services/tariff_enrichment.py:ro
+      - ./backend/app/api/v1/endpoints/documents.py:/app/app/api/v1/endpoints/documents.py:ro
+      - ./backend/app/ocr/tesseract.py:/app/app/ocr/tesseract.py:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     environment:
       - ENVIRONMENT=production
       - CORS_ORIGINS=https://localhost

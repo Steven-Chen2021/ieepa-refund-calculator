@@ -20,6 +20,103 @@
 
 ---
 
+## OCR Pipeline — HTS Rate Matching
+
+### Problem
+
+CBP Form 7501 Box 33 **omits 0% duty rates entirely**. A line group may contain
+5 HTS codes but only 3 printed rates. Positional (order-based) matching of rates
+to codes is therefore unreliable and produces wrong assignments.
+
+Example — Line 001 of sample `2810306.pdf`:
+
+| HTS Code | Type | Rate | PDF Printed? |
+|---|---|---|---|
+| `9903.88.03` | S301 | 25% | ✅ |
+| `9903.01.24` | IEEPA | 10% | ✅ |
+| `9903.01.33` | IEEPA | **0%** | ❌ omitted |
+| `9903.85.08` | S232 | 50% | ✅ |
+| `8508.70.0000` | MFN | **0%** | ❌ omitted |
+
+### Solution — Three-Layer Fix
+
+**Layer 1 — Tesseract parser (`app/ocr/tesseract.py`)**
+
+`_extract_line_items` uses a two-phase approach:
+
+- **Phase 1 (parse):** Accumulates each line group into a `_GroupData` structure
+  storing supplemental HTS rows, the main HTS row, and all PDF-printed
+  rate/duty pairs (`pdf_rate_duty_pairs`) for cross-validation only.
+- **Phase 2 (assemble):** Propagates `entered_value` from the main HTS row to
+  every supplemental row in the group. Sets `duty_rate` and `duty_amount` to
+  `_missing_field()` (value=None) — rates are filled by Layer 3.
+
+**Layer 2 — Google Document AI parser (`app/ocr/google_docai.py`)**
+
+`_post_process_table_items` runs after raw table extraction:
+
+- Inherits blank `line_number` cells from the previous non-blank row
+  (DocAI continuation rows often have no line_number cell).
+- Propagates `entered_value` from the main HTS row to supplemental rows.
+- Collects `pdf_rate_duty_pairs` from rate/duty cells per group.
+- Clears `duty_rate` / `duty_amount` on all rows — filled by Layer 3.
+
+**Layer 3 — Tariff enrichment service (`app/services/tariff_enrichment.py`)**
+
+Called from `app/tasks/ocr.py` after OCR extraction, before persisting to DB.
+
+- `infer_tariff_type(hts_code)` maps HTS prefix to `TariffType`:
+  - `9903.01.xx` → IEEPA
+  - `9903.88.xx` → S301
+  - `9903.80–82.xx` → S232 (steel)
+  - `9903.85–86.xx` → S232 (aluminium)
+  - Other `9903.xx.xx` → tries S232 then S301 in order
+  - All other codes → MFN
+- `enrich_extracted_fields(extracted_dict, country, summary_date, session)`
+  queries the `tariff_rates` DB table (no Redis — OCR Celery task context)
+  for each HTS code using the same composite-key logic as the calculator:
+  `(hts_code, country_code IN [cc, '*'], tariff_type, effective_from ≤ date ≤ effective_to)`.
+  Sets `duty_rate` (e.g. `"25%"`) and `duty_amount` as `OcrField` objects
+  with `confidence=0.95`. Sets `rate_source="db"` on success, `"not_found"` on miss.
+- BR-001 enforced: IEEPA returns $0 immediately for non-CN goods.
+- Cross-validates: sum of DB-computed duties vs `pdf_rate_duty_pairs` —
+  warns (non-fatal) if difference exceeds 5%.
+
+### Enrichment is Non-Fatal
+
+If enrichment fails for any reason (DB unavailable, missing date/country), the
+OCR pipeline logs a warning and continues with `duty_rate=None` fields. The
+calculator performs its own authoritative DB lookup at calculation time regardless.
+
+### Data Flow
+
+```
+PDF upload
+   │
+   ▼
+[OCR: DocAI or Tesseract]
+   │  → extracts HTS codes with entered_value propagated to all rows
+   │  → stores pdf_rate_duty_pairs (for cross-validation only)
+   │  → duty_rate = None (pending DB enrichment)
+   │
+   ▼
+[tariff_enrichment.enrich_extracted_fields()]
+   │  → infer_tariff_type(hts_code)  — prefix-based TariffType hint
+   │  → DB query: tariff_rates (composite key, no Redis)
+   │  → duty_rate = "25%"  (OcrField, confidence=0.95)
+   │  → duty_amount = "35.25"  (Decimal, ROUND_HALF_UP)
+   │  → cross-validate vs pdf_rate_duty_pairs (warn-only)
+   │
+   ▼
+[extracted_fields saved to documents table]
+   │
+   ▼
+[calculator.calculate_entry()]
+   → entered_value × DB rate (Redis-cached) → final duty amounts
+```
+
+---
+
 ## Prerequisites
 
 Ensure the following are installed before proceeding:
@@ -318,6 +415,23 @@ docker compose exec api alembic stamp head   # mark as current without running
 - Check `docker compose logs worker` for extraction errors.
 - `pdfplumber` is used for digital PDFs; ensure it installed correctly via `docker compose up -d --build worker`.
 
+### Duty rates show as `null` after OCR
+
+The post-OCR tariff enrichment step queries the `tariff_rates` table to assign
+authoritative rates to each HTS code. If rates are missing:
+
+1. Confirm `tariff_rates` table is populated — run:
+   ```bash
+   docker compose exec api alembic upgrade head
+   docker compose exec db psql -U ieepa_app -d ieepa_refund_db -c "SELECT COUNT(*) FROM tariff_rates;"
+   ```
+2. Check worker logs for `tariff enrichment failed` or `No DB rate found` warnings:
+   ```bash
+   docker compose logs worker | grep enrichment
+   ```
+3. Enrichment failure is **non-fatal** — the calculator will still perform its own
+   DB lookup at calculation time. `duty_rate=null` in `extracted_fields` is acceptable.
+
 ### Port conflict on 5432 or 6379
 
 Stop any local PostgreSQL or Redis instances, or change the host-side port mapping in `docker-compose.yml`:
@@ -341,8 +455,12 @@ ieepa-refund-calculator/
 │   │   ├── middleware/         # Security headers middleware
 │   │   ├── models/             # SQLAlchemy ORM models
 │   │   ├── ocr/                # Google Document AI + Tesseract fallback + Fernet crypto
+│   │   │   ├── google_docai.py # DocAI parser + _post_process_table_items (HTS rate fix)
+│   │   │   └── tesseract.py    # pdfplumber/Tesseract parser + two-phase _extract_line_items
 │   │   ├── schemas/            # Pydantic v2 request/response schemas
-│   │   └── tasks/ocr.py        # Celery OCR task
+│   │   ├── services/
+│   │   │   └── tariff_enrichment.py  # Post-OCR DB rate lookup per HTS code
+│   │   └── tasks/ocr.py        # Celery OCR task (calls tariff_enrichment after OCR)
 │   ├── alembic/                # Database migration scripts
 │   ├── scripts/                # Developer utility scripts (e.g. test_ocr_extraction.py)
 │   ├── tests/

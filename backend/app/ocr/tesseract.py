@@ -57,9 +57,11 @@ _PDFPLUMBER_CONFIDENCE: float = 0.90
 # Tesseract image OCR is less reliable than Document AI
 _TESSERACT_MAX_CONFIDENCE: float = 0.75
 
-# ── IEEPA / S301 supplemental HTS prefix detection ───────────────────────────
-_S301_PREFIX = re.compile(r"^9903\.88\.", re.I)
+# ── IEEPA / S301 / S232 supplemental HTS prefix detection ────────────────────
+_S301_PREFIX  = re.compile(r"^9903\.88\.", re.I)
 _IEEPA_PREFIX = re.compile(r"^9903\.01\.", re.I)
+# Section 232 steel (9903.80-82) and aluminium (9903.85-86) supplemental codes
+_S232_SUPP_PREFIX = re.compile(r"^9903\.8[01256]\.", re.I)
 
 # ── Compiled regexes used inside the line-by-line parser ─────────────────────
 
@@ -84,15 +86,25 @@ _COMPANY_RE = re.compile(r"[A-Z][A-Za-z0-9 &'()\-.,]+$")
 _LINE_NO_RE = re.compile(r"^\s{2,6}(\d{3})\s+\S")
 # Supplemental HTS alone on a line (no trailing data)
 _SUPP_HTS_RE = re.compile(r"^\s+(\d{4}\.\d{2}\.\d{2,4})\s*$")
-# Main HTS with entered value, duty rate, and duty amount
+# Main HTS with entered value, first non-zero Box 33 rate, and duty amount.
+# NOTE: the rate/duty captured here is the FIRST non-zero rate from Box 33 for
+# this entire line group — it may belong to any supplemental code, not the main
+# HTS itself. Zero-percent rates are omitted from the PDF entirely, so positional
+# matching is unreliable. Rates are resolved via DB lookup in tariff_enrichment.py.
 _MAIN_HTS_RE = re.compile(
     r"^\s+(\d{4}\.\d{2}\.\d{4})\s+"     # HTS code (8/10-digit)
     r"\S+\s+\S+\w*\s+"                   # gross_wt  net_qty[units]
     r"(\d[\d,]*)\s+"                      # entered value
-    r"(\d+\.?\d*%)"                       # duty rate
-    r"\s+([\d,]+\.\d{2})",               # duty amount
+    r"(\d+\.?\d*%)"                       # first non-zero rate from Box 33
+    r"\s+([\d,]+\.\d{2})",               # corresponding duty amount
 )
-# Rate-only continuation line for supplemental tariffs
+# Main HTS with entered value but NO rate (all rates in this group are 0%)
+_MAIN_HTS_NO_RATE_RE = re.compile(
+    r"^\s+(\d{4}\.\d{2}\.\d{4})\s+"     # HTS code
+    r"\S+\s+\S+\w*\s+"                   # gross_wt  net_qty[units]
+    r"(\d[\d,]*)\s*$",                   # entered value only — no rate follows
+)
+# Rate-only continuation: subsequent non-zero Box 33 rates for the same group
 _RATE_ONLY_RE = re.compile(
     r"^\s+(\d+\.?\d*%)\s+([\d,]+\.\d{2})\s*$",
 )
@@ -118,6 +130,8 @@ def _classify_hts(hts_code: str) -> tuple[bool, str]:
         return True, "IEEPA"
     if _S301_PREFIX.match(code):
         return False, "S301"
+    if _S232_SUPP_PREFIX.match(code):
+        return False, "S232"
     if code.startswith("9903."):
         return False, "other_supplemental"
     return False, "main"
@@ -253,25 +267,49 @@ def _extract_header_fields(text: str, base_conf: float) -> dict[str, OcrField]:
 
 def _extract_line_items(text: str, base_conf: float) -> list[dict[str, Any]]:
     """
-    State-machine line-item extractor for CBP Form 7501 (all pages).
+    Two-phase state-machine extractor for CBP Form 7501 line items.
+
+    **Why two phases?**
+    CBP Form 7501 Box 33 omits 0% duty rates entirely, so the number of
+    printed rates never equals the number of HTS codes in a line group.
+    Positional (order-based) matching of rates to HTS codes is therefore
+    unreliable.  Instead we:
+
+      Phase 1 – Parse: accumulate each line group into a `_GroupData` dict that
+        stores supp_items, main_item, entered_value, and *all* PDF-printed
+        rate/duty pairs (for cross-validation only).
+
+      Phase 2 – Assemble: propagate the main HTS `entered_value` to every
+        supplemental row in the group; set `duty_rate` / `duty_amount` to
+        _missing_field() on every row so that tariff_enrichment.py can fill
+        them authoritatively from the `tariff_rates` DB.
 
     Handles the multi-line structure:
-      001 {description}             ← new line group (Box 27)
-          {supplemental_hts}        ← IEEPA / S301 codes (Box 29)
-          {main_hts} {w} {qty} {EV} {rate}% {duty}  ← main HTS (Box 29/33)
-                         {rate}% {duty}              ← rate-only continuation
+      001 {description}                        ← new line group (Box 27)
+          {supplemental_hts}                   ← IEEPA / S301 / S232 codes
+          {supplemental_hts}
+          {main_hts} {w} {qty} {EV} [{rate%} {duty}]  ← main HTS (Box 29/33)
+                         [{rate%} {duty}]              ← more Box 33 pairs
     """
-    items: list[dict[str, Any]] = []
+    # ── _GroupData shape ────────────────────────────────────────────────────
+    # {
+    #   "line_no":     int,
+    #   "supp_items":  list[dict],          # supplemental HTS rows (no EV/rate)
+    #   "main_item":   dict | None,         # main HTS row (has EV, no rate yet)
+    #   "pdf_pairs":   list[{"rate_pct": str, "duty_amount": str}],
+    # }
+
+    groups: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
     in_items = False
-    current_line_no: int | None = None
 
     for line in text.splitlines():
-        # Arm / re-arm when the line-items section header is found (page 1 or 2)
+        # Arm / re-arm when the line-items section header is found (any page)
         if "Line A. HTSUS No." in line:
             in_items = True
             continue
 
-        # Disarm at end-of-section markers; re-arms again on the next page header
+        # Disarm at end-of-section markers; re-arms again on next page header
         if in_items and ("Other Fee Summary" in line or "36. DECLARATION" in line):
             in_items = False
             continue
@@ -282,10 +320,16 @@ def _extract_line_items(text: str, base_conf: float) -> list[dict[str, Any]]:
         # ── New line group (Box 27 line number) ────────────────────────
         m = _LINE_NO_RE.match(line)
         if m:
-            current_line_no = int(m.group(1))
+            current = {
+                "line_no":    int(m.group(1)),
+                "supp_items": [],
+                "main_item":  None,
+                "pdf_pairs":  [],
+            }
+            groups.append(current)
             continue
 
-        if current_line_no is None:
+        if current is None:
             continue
 
         # ── Supplemental-only HTS code ─────────────────────────────────
@@ -293,45 +337,83 @@ def _extract_line_items(text: str, base_conf: float) -> list[dict[str, Any]]:
         if m:
             hts = m.group(1)
             is_ieepa, category = _classify_hts(hts)
-            items.append({
-                "line_number":     current_line_no,
+            current["supp_items"].append({
+                "line_number":     current["line_no"],
                 "hts_code":        _make_field(hts, base_conf),
                 "is_ieepa":        is_ieepa,
                 "tariff_category": category,
-                "entered_value":   _missing_field(),
-                "duty_rate":       _missing_field(),
-                "duty_amount":     _missing_field(),
+                "entered_value":   _missing_field(),   # propagated in Phase 2
+                "duty_rate":       _missing_field(),   # filled by DB enrichment
+                "duty_amount":     _missing_field(),   # filled by DB enrichment
             })
             continue
 
-        # ── Main HTS with entered value and rate ────────────────────────
+        # ── Main HTS with entered value + first non-zero rate/duty pair ──
         m = _MAIN_HTS_RE.match(line)
         if m:
             hts = m.group(1)
             is_ieepa, category = _classify_hts(hts)
-            items.append({
-                "line_number":     current_line_no,
+            current["main_item"] = {
+                "line_number":     current["line_no"],
                 "hts_code":        _make_field(hts, base_conf),
                 "is_ieepa":        is_ieepa,
                 "tariff_category": category,
                 "entered_value":   _make_field(m.group(2).replace(",", ""), base_conf),
-                "duty_rate":       _make_field(m.group(3), base_conf),
-                "duty_amount":     _make_field(m.group(4).replace(",", ""), base_conf),
+                "duty_rate":       _missing_field(),   # filled by DB enrichment
+                "duty_amount":     _missing_field(),   # filled by DB enrichment
+            }
+            # Store the first non-zero PDF rate/duty pair for cross-validation
+            current["pdf_pairs"].append({
+                "rate_pct":    m.group(3),
+                "duty_amount": m.group(4).replace(",", ""),
             })
             continue
 
-        # ── Rate-only continuation (fills in supplemental HTS duty) ────
+        # ── Main HTS with entered value but ALL rates are 0% (nothing printed) ──
+        m = _MAIN_HTS_NO_RATE_RE.match(line)
+        if m and current["main_item"] is None:
+            hts = m.group(1)
+            is_ieepa, category = _classify_hts(hts)
+            current["main_item"] = {
+                "line_number":     current["line_no"],
+                "hts_code":        _make_field(hts, base_conf),
+                "is_ieepa":        is_ieepa,
+                "tariff_category": category,
+                "entered_value":   _make_field(m.group(2).replace(",", ""), base_conf),
+                "duty_rate":       _missing_field(),
+                "duty_amount":     _missing_field(),
+            }
+            continue
+
+        # ── Rate-only continuation: additional non-zero Box 33 pairs ───
         m = _RATE_ONLY_RE.match(line)
-        if m and items:
-            for prev in reversed(items):
-                if (
-                    prev.get("line_number") == current_line_no
-                    and isinstance(prev.get("duty_rate"), OcrField)
-                    and prev["duty_rate"].value is None
-                ):
-                    prev["duty_rate"]   = _make_field(m.group(1), base_conf)
-                    prev["duty_amount"] = _make_field(m.group(2).replace(",", ""), base_conf)
-                    break
+        if m:
+            current["pdf_pairs"].append({
+                "rate_pct":    m.group(1),
+                "duty_amount": m.group(2).replace(",", ""),
+            })
+
+    # ── Phase 2: assemble flat list ────────────────────────────────────────
+    items: list[dict[str, Any]] = []
+    for grp in groups:
+        main = grp["main_item"]
+        if main is None:
+            # No main HTS found — emit supplementals as-is (enrichment will handle)
+            items.extend(grp["supp_items"])
+            continue
+
+        ev_field = main["entered_value"]
+
+        # Propagate entered_value to every supplemental row in this group
+        for supp in grp["supp_items"]:
+            supp["entered_value"] = ev_field
+            items.append(supp)
+
+        # Attach PDF rate/duty pairs to the main HTS row for cross-validation
+        if grp["pdf_pairs"]:
+            main["pdf_rate_duty_pairs"] = grp["pdf_pairs"]
+
+        items.append(main)
 
     return items
 

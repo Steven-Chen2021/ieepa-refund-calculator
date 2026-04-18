@@ -15,6 +15,7 @@ Upload security controls (Security_Spec.md §7.3.4, SEC-007)
 6. File stored encrypted on disk (AES-256/Fernet) before job is queued
 7. Session cookie issued to guest on first upload (§7.1.7)
 """
+import logging
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -51,9 +52,12 @@ from app.engine.calculator import (
 )
 from app.models.calculation import Calculation, CalculationStatus
 from app.models.document import Document, DocumentStatus
+from app.services.tariff_enrichment import enrich_extracted_fields
 from app.tasks.ocr import process_ocr_job, store_upload_encrypted
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants — SEC-007
@@ -264,6 +268,42 @@ def _upload_response(doc: Document) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Lazy-enrichment helpers
+# ---------------------------------------------------------------------------
+
+def _line_items_need_enrichment(fields: dict) -> bool:
+    """
+    True if any 9903.xx.xx line item has never had enrichment attempted
+    (i.e. ``rate_source`` key is completely absent from the item dict).
+
+    Documents enriched after tariff_rates was seeded will have
+    ``rate_source='db'`` or ``rate_source='not_found'`` on every 9903 item, so
+    this returns False and avoids repeating the DB round-trip on every GET.
+    """
+    for item in fields.get("line_items", []):
+        hts = item.get("hts_code")
+        hts_val = hts.get("value") if isinstance(hts, dict) else hts
+        if hts_val and str(hts_val).startswith("9903.") and "rate_source" not in item:
+            return True
+    return False
+
+
+def _recompute_review_count(fields: dict) -> int:
+    """Recount ``review_required=True`` items after enrichment updates fields."""
+    count = 0
+    for k, v in fields.items():
+        if k in ("line_items", "review_required_count"):
+            continue
+        if isinstance(v, dict) and v.get("review_required"):
+            count += 1
+    for item in fields.get("line_items", []):
+        for v in item.values():
+            if isinstance(v, dict) and v.get("review_required"):
+                count += 1
+    return count
+
+
+# ---------------------------------------------------------------------------
 # GET /documents/{job_id}/status
 # ---------------------------------------------------------------------------
 
@@ -284,6 +324,9 @@ async def get_document_status(
     Returns current OCR status and extracted fields once processing is complete.
 
     Access control: session cookie or authenticated user must own the document.
+
+    Lazy enrichment: if the document was processed before tariff_rates were seeded,
+    enrichment is applied transparently on first fetch and persisted.
     """
     doc = await _get_authorized_doc(db, job_id, session_id_cookie, current_user)
 
@@ -297,7 +340,31 @@ async def get_document_status(
     }
 
     if doc.status in (DocumentStatus.completed, DocumentStatus.review_required):
-        data["extracted_fields"] = doc.extracted_fields
+        fields: dict = dict(doc.extracted_fields or {})
+
+        if _line_items_need_enrichment(fields):
+            merged_header = merge_doc_fields(fields, doc.corrections)
+            country_raw = (merged_header.get("country_of_origin") or "").upper().strip()
+            summary_date = _parse_date(merged_header.get("summary_date"))
+            if country_raw:
+                try:
+                    fields = await enrich_extracted_fields(
+                        fields, country_raw, summary_date, db
+                    )
+                    fields["review_required_count"] = _recompute_review_count(fields)
+                    await db.execute(
+                        update(Document)
+                        .where(Document.id == job_id)
+                        .values(extracted_fields=fields)
+                    )
+                    await db.commit()
+                    logger.info("Lazy enrichment applied for job %s", job_id)
+                except Exception as _exc:
+                    logger.warning(
+                        "Lazy enrichment failed for job %s: %s", job_id, _exc
+                    )
+
+        data["extracted_fields"] = fields
 
     return {"success": True, "data": data, "error": None, "meta": None}
 
